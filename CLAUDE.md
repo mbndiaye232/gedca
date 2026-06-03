@@ -26,7 +26,7 @@ Avant tout développement non trivial : relire la section du guide concernée.
 
 L'application doit pouvoir tourner dans **deux modes** identiques fonctionnellement :
 
-1. **SaaS cloud multi-tenant** — une instance unique sert plusieurs organisations clientes. `tenant_id` présent sur toutes les tables métier. Hébergement type Render/Aiven/Cloudflare.
+1. **SaaS cloud multi-tenant** — une instance unique sert plusieurs organisations clientes. `tenant_id` présent sur toutes les tables métier. Hébergement Render (API + Worker + Beat + Managed PostgreSQL avec pgvector + Key Value Redis) et Cloudflare Pages pour le frontend statique.
 2. **On-premise mono-tenant** — un seul `docker-compose up` chez le client. `tenant_id = 1` fixe. Aucune fuite réseau possible si IA configurée en local.
 
 Le mode est piloté par variable d'env `DEPLOYMENT_MODE=saas|onprem`. Le code applicatif doit rester identique ; seules la configuration et l'infrastructure changent.
