@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     celery_worker_concurrency: int = 2
     imap_poll_interval_min: int = 15
+    imap_staging_ttl_days: int = 30
 
     # --- Sécurité ---
     jwt_secret: str

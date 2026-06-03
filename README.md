@@ -26,7 +26,7 @@ Conversion en stack web moderne de l'application desktop WinDev historique « SO
 
 | Mode | Cible | Multi-tenant | IA |
 |---|---|---|---|
-| SaaS cloud | Render / Aiven / Cloudflare | Oui, `tenant_id` sur toutes les tables | Anthropic API |
+| SaaS cloud | Render (API + Worker + PostgreSQL + Redis) + Cloudflare Pages (frontend) | Oui, `tenant_id` sur toutes les tables | Anthropic API |
 | On-premise | `docker-compose up` chez le client | Non, `tenant_id` fixe | Ollama + e5-large |
 
 ## Prochaines étapes

@@ -99,7 +99,8 @@ CREATE TABLE agents (
   id              BIGSERIAL PRIMARY KEY,
   tenant_id       BIGINT      NOT NULL REFERENCES tenants(id),
   login           VARCHAR(64) NOT NULL,
-  password_hash   TEXT        NOT NULL,
+  password_hash   TEXT,                                  -- NULL si auth_provider='ldap'
+  auth_provider   VARCHAR(16) NOT NULL DEFAULT 'local',  -- 'local' | 'ldap' (réservé v2)
   nom             VARCHAR(128) NOT NULL,
   prenom          VARCHAR(128) NOT NULL,
   email           VARCHAR(255),
@@ -113,7 +114,9 @@ CREATE TABLE agents (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (tenant_id, login),
-  UNIQUE (tenant_id, email)
+  UNIQUE (tenant_id, email),
+  CHECK (auth_provider IN ('local', 'ldap')),
+  CHECK (auth_provider = 'ldap' OR password_hash IS NOT NULL)
 );
 
 CREATE INDEX idx_agents_tenant_actif ON agents (tenant_id, actif);
@@ -642,17 +645,36 @@ Pas de table dédiée. La table `audit_log` enregistre les opérations de sauveg
 
 ## 8. Ordre des migrations Alembic
 
-1. Extensions + configuration FTS (`french_unaccent`).
-2. Tables référentiels statiques : `roles`, `types_correspondant`, `statuts_courrier`, `etats_avancement`.
+Les migrations sont alignées sur le découpage en PRD. Chaque migration est nommée `NNN_objet.py` (`001_socle.py`, `002_stockage.py`, etc.).
+
+### Migration 001 — Socle (PRD-01)
+1. Extensions PostgreSQL (`pgcrypto`, `pg_trgm`, `unaccent`, `vector`) + configuration FTS `french_unaccent`.
+2. Référentiels statiques : `roles`, `types_correspondant`.
 3. `tenants`.
 4. `departements`, `agents`.
 5. `audit_log`.
-6. `categories`, `thematiques`, `types_document`, `correspondants`.
-7. `documents`, `document_versions`, trigger FTS.
-8. Archivage physique : `sites` → `locaux_salles` → `rayons` → `boites` → `dossiers_classeurs` → `sous_dossiers` → `documents_sous_dossiers` + vue `v_sous_dossiers_code`.
-9. GEC : `courriers`, `copies_courriers`, `imputations`, `demandes_validation`, `notes_courrier`, `historiques_courrier`, `documents_courrier`, `redirections`, `alertes_envoyees`.
-10. Vues utilitaires : `v_courriers_agent`.
-11. Seed initial : tenant de test, superviseur admin, statuts métier, types correspondant.
+6. Seed : rôles, types correspondant, tenant de test, agent superviseur initial.
+
+### Migration 002 — Stockage et archivage physique (PRD-02)
+7. `categories`, `thematiques`, `types_document`, `correspondants`.
+8. `documents`, `document_versions`, trigger FTS.
+9. **Archivage physique** (toutes les tables, vides — peuplées au runtime par PRD-05) :
+   `sites` → `locaux_salles` → `rayons` → `boites` → `dossiers_classeurs` → `sous_dossiers` → `documents_sous_dossiers` + vue `v_sous_dossiers_code`.
+
+> **Choix** : créer les 6 tables d'archivage dès cette migration permet à `documents_sous_dossiers` d'avoir une FK propre sans `DEFERRABLE`. PRD-05 n'ajoute aucune migration de schéma, juste les routes et l'UI.
+
+### Migration 003 — Pipeline ingestion (PRD-03)
+10. `ALTER TABLE tenants` — ajout des colonnes IMAP (`imap_host`, `imap_port`, `imap_user`, `imap_password_enc`, `imap_folder`, `imap_actif`, `imap_dernier_uid`).
+11. `imap_pieces_jointes` — métadonnées des pièces jointes en attente d'intégration (le contenu binaire est stocké sur disque chiffré, pas en base — voir PRD-03 §5.8).
+12. `statuts_courrier`, `etats_avancement` — référentiels (créés ici car référencés par GEC ensuite).
+
+### Migration 004 — GEC (PRD-06)
+13. `courriers`, `copies_courriers`, `imputations`, `demandes_validation`, `notes_courrier`, `historiques_courrier`, `documents_courrier`, `redirections`, `alertes_envoyees`.
+14. Vues utilitaires : `v_courriers_agent`.
+
+### Migrations ultérieures
+- PRD-07 (IA avancée) : éventuelles tables de suggestions / cache.
+- PRD-08 (Transverse) : tables de sauvegarde, exports.
 
 ---
 
