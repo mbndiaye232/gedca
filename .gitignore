@@ -59,7 +59,8 @@ backups/
 quarantaine/
 
 # --- Données générées ---
-docs/guide.txt          # texte extrait du PDF, régénérable
+# Texte extrait du PDF, régénérable via pdftotext
+docs/guide.txt
 
 # --- OS ---
 Thumbs.db
