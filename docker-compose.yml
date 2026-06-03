@@ -48,11 +48,15 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       MASTER_KEY: ${MASTER_KEY}
-      STORAGE_PATH: ${STORAGE_PATH}
+      STORAGE_ROOT: ${STORAGE_ROOT}
       QUARANTINE_PATH: ${QUARANTINE_PATH}
+      WORKER_TEMP_DIR: ${WORKER_TEMP_DIR}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB}
       AI_PROVIDER: ${AI_PROVIDER}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       LOG_LEVEL: ${LOG_LEVEL}
     volumes:
@@ -72,17 +76,23 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: gedca-worker
-    command: ["celery", "-A", "app.worker", "worker", "--loglevel=info"]
+    command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=${CELERY_WORKER_CONCURRENCY}"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY}
       MASTER_KEY: ${MASTER_KEY}
-      STORAGE_PATH: ${STORAGE_PATH}
+      STORAGE_ROOT: ${STORAGE_ROOT}
       QUARANTINE_PATH: ${QUARANTINE_PATH}
+      WORKER_TEMP_DIR: ${WORKER_TEMP_DIR}
       AI_PROVIDER: ${AI_PROVIDER}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
-      WATCH_FOLDER: ${WATCH_FOLDER}
+      WATCHER_ROOT: ${WATCHER_ROOT}
+      WATCHER_ENABLED: ${WATCHER_ENABLED}
+      WATCHER_FORCE_POLLING: ${WATCHER_FORCE_POLLING}
+      IMAP_POLL_INTERVAL_MIN: ${IMAP_POLL_INTERVAL_MIN}
     volumes:
       - ./backend:/app
       - storage_data:/app/storage
