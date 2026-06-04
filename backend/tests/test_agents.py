@@ -22,7 +22,7 @@ async def test_superviseur_peut_creer_agent_qui_se_connecte(
             "mot_de_passe": "Password456!",
             "nom": "Test",
             "prenom": "Nouveau",
-            "email": "nouveau@test.local",
+            "email": "nouveau@example.com",
             "departement_id": departement.id,
             "role_id": 3,  # agent_standard
         },

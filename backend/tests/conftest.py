@@ -61,24 +61,50 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 @pytest_asyncio.fixture(scope="session")
 async def _engine():
-    """Engine SQLAlchemy de session (partagé entre tests)."""
-    engine = create_async_engine(get_settings().database_url, future=True)
+    """Engine SQLAlchemy de session.
+
+    NullPool : pas de réutilisation de connexion entre tests, évite les
+    problèmes de event-loop sur asyncpg quand pytest-asyncio recrée la boucle.
+    """
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(
+        get_settings().database_url,
+        future=True,
+        poolclass=NullPool,
+    )
     yield engine
     await engine.dispose()
 
 
+_TABLES_A_TRUNCATE = (
+    "audit_log",
+    "agents",
+    "departements",
+    "tenants",
+)
+
+
+async def _truncate_tables(engine) -> None:
+    """Vide les tables métier (préserve roles et types_correspondant seedés)."""
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(f"TRUNCATE {', '.join(_TABLES_A_TRUNCATE)} RESTART IDENTITY CASCADE")
+        )
+
+
 @pytest_asyncio.fixture
 async def db(_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Session DB isolée par test, rollback automatique."""
-    async with _engine.connect() as conn:
-        trans = await conn.begin()
-        session_factory = async_sessionmaker(bind=conn, expire_on_commit=False)
-        async with session_factory() as session:
-            try:
-                yield session
-            finally:
-                await session.close()
-        await trans.rollback()
+    """Session DB normale. Truncate des tables métier après chaque test."""
+    factory = async_sessionmaker(_engine, expire_on_commit=False)
+    async with factory() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+    await _truncate_tables(_engine)
 
 
 @pytest_asyncio.fixture
