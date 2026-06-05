@@ -1,0 +1,447 @@
+"""Routes de gestion des documents (PRD-02).
+
+- POST /api/documents — upload (multipart) avec déduplication SHA-256
+- GET /api/documents — recherche/liste paginée
+- GET /api/documents/{id} — métadonnées
+- PUT /api/documents/{id} — modification métadonnées
+- DELETE /api/documents/{id} — soft delete (superviseur)
+- GET /api/documents/{id}/contenu — streaming déchiffré (visionneuse)
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+
+from app.api.deps import (
+    AgentArchivisteOuPlus,
+    AgentCourant,
+    AgentSuperviseur,
+    IpClient,
+    SessionDB,
+)
+from app.config import get_settings
+from app.models import Document, DocumentSousDossier
+from app.schemas.document import (
+    DocumentLecture,
+    DocumentMetadonnees,
+    DocumentMiseAJour,
+)
+from app.services.audit import journaliser
+from app.services.storage import stocker, stream_dechiffre
+
+router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+# ---------------------------------------------------------------------------
+# Upload
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "",
+    response_model=DocumentLecture,
+    status_code=status.HTTP_201_CREATED,
+    summary="Uploader un document",
+)
+async def uploader(
+    request: Request,
+    db: SessionDB,
+    agent: AgentArchivisteOuPlus,
+    ip: IpClient,
+    fichier: Annotated[UploadFile, File(description="Fichier binaire à uploader")],
+    metadonnees: Annotated[
+        str,
+        Form(
+            description=(
+                "JSON sérialisé des métadonnées (titre, categorie_id obligatoire, "
+                "description, resume, mots_cles, thematique_id, type_document_id, "
+                "date_document, confidentiel, sous_dossier_id)."
+            ),
+        ),
+    ],
+) -> Document:
+    # 1. Parser et valider les métadonnées
+    try:
+        meta = DocumentMetadonnees.model_validate(json.loads(metadonnees))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Métadonnées invalides : {exc}",
+        ) from exc
+
+    # 2. Vérifier la taille avant lecture complète
+    settings = get_settings()
+    taille_max = settings.max_upload_size_mb * 1024 * 1024
+    contenu = await fichier.read()
+    if len(contenu) > taille_max:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Fichier trop volumineux (max {settings.max_upload_size_mb} Mo)",
+        )
+
+    # 3. Chiffrement + stockage + checksum + détection MIME
+    stocke = await stocker(contenu, tenant_id=agent.tenant_id)
+
+    # 4. Déduplication par checksum
+    existant = await db.execute(
+        select(Document).where(
+            Document.tenant_id == agent.tenant_id,
+            Document.checksum_sha256 == stocke.checksum_sha256,
+            Document.supprime.is_(False),
+        )
+    )
+    doc_existant = existant.scalar_one_or_none()
+    if doc_existant is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Ce fichier est déjà présent (document #{doc_existant.id}, "
+                f"« {doc_existant.titre} »)."
+            ),
+            headers={"X-Document-Existant-Id": str(doc_existant.id)},
+        )
+
+    # 5. Création de l'enregistrement
+    document = Document(
+        tenant_id=agent.tenant_id,
+        titre=meta.titre,
+        description=meta.description,
+        resume=meta.resume,
+        mots_cles=meta.mots_cles,
+        categorie_id=meta.categorie_id,
+        thematique_id=meta.thematique_id,
+        type_document_id=meta.type_document_id,
+        mime=stocke.mime,
+        taille_octets=stocke.taille_octets,
+        checksum_sha256=stocke.checksum_sha256,
+        chemin_stockage=stocke.chemin_relatif,
+        nonce=stocke.nonce,
+        date_document=meta.date_document,
+        date_numerisation=datetime.now(timezone.utc),
+        confidentiel=meta.confidentiel,
+        origine="upload",
+        statut="pret",
+        created_by=agent.id,
+    )
+    db.add(document)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Référence invalide (catégorie/thématique/type) : {exc.orig}",
+        ) from exc
+
+    # 6. Lien optionnel vers sous-dossier physique
+    if meta.sous_dossier_id is not None:
+        db.add(
+            DocumentSousDossier(
+                document_id=document.id,
+                sous_dossier_id=meta.sous_dossier_id,
+            )
+        )
+
+    # 7. Audit
+    await journaliser(
+        db,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        action="document.upload",
+        entite="documents",
+        entite_id=document.id,
+        payload={
+            "titre": document.titre,
+            "mime": document.mime,
+            "taille_octets": document.taille_octets,
+        },
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(document)
+    return document
+
+
+# ---------------------------------------------------------------------------
+# Liste / recherche
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "",
+    response_model=list[DocumentLecture],
+    summary="Lister les documents du tenant (filtrable)",
+)
+async def lister(
+    agent: AgentCourant,
+    db: SessionDB,
+    q: str | None = Query(None, description="Recherche plein texte"),
+    categorie_id: int | None = Query(None),
+    statut: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> list[Document]:
+    base = select(Document).where(
+        Document.tenant_id == agent.tenant_id,
+        Document.supprime.is_(False),
+    )
+
+    if statut:
+        base = base.where(Document.statut == statut)
+    if categorie_id is not None:
+        base = base.where(Document.categorie_id == categorie_id)
+    if q:
+        # Recherche FTS sur recherche_fts (déjà tsvector french_unaccent)
+        base = base.where(
+            func.to_tsquery("french_unaccent", _normaliser_pour_tsquery(q)).op("@@")(
+                Document.recherche_fts
+            )
+        )
+
+    base = base.order_by(Document.created_at.desc()).limit(limit).offset(offset)
+    result = await db.execute(base)
+    return list(result.scalars())
+
+
+def _normaliser_pour_tsquery(q: str) -> str:
+    """Convertit une recherche libre en expression `tsquery` `mot1 & mot2`."""
+    tokens = [t for t in q.split() if t.strip()]
+    if not tokens:
+        return "''"
+    # Échapper les ' et combiner avec &
+    safe = [t.replace("'", "''") + ":*" for t in tokens]
+    return " & ".join(safe)
+
+
+# ---------------------------------------------------------------------------
+# Détail / MAJ / suppression
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{document_id}",
+    response_model=DocumentLecture,
+    summary="Métadonnées d'un document",
+)
+async def lire(
+    document_id: int, agent: AgentCourant, db: SessionDB
+) -> Document:
+    doc = await _charger(db, document_id, agent.tenant_id)
+    if doc.confidentiel and agent.role.code == "agent_standard":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Document confidentiel — accès restreint",
+        )
+    return doc
+
+
+@router.put(
+    "/{document_id}",
+    response_model=DocumentLecture,
+    summary="Modifier les métadonnées d'un document (archiviste, superviseur ou auteur)",
+)
+async def maj(
+    document_id: int,
+    body: DocumentMiseAJour,
+    request: Request,
+    db: SessionDB,
+    agent: AgentCourant,
+    ip: IpClient,
+) -> Document:
+    doc = await _charger(db, document_id, agent.tenant_id)
+
+    # Droits : archiviste / superviseur / créateur
+    if agent.role.code == "agent_standard" and doc.created_by != agent.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous n'êtes pas autorisé à modifier ce document",
+        )
+
+    # Seul superviseur peut modifier `confidentiel`
+    if body.confidentiel is not None and agent.role.code != "superviseur":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seul un superviseur peut modifier le statut confidentiel",
+        )
+
+    diff: dict[str, object] = {}
+    for champ in (
+        "titre",
+        "description",
+        "resume",
+        "mots_cles",
+        "categorie_id",
+        "thematique_id",
+        "type_document_id",
+        "date_document",
+        "confidentiel",
+    ):
+        nouvelle = getattr(body, champ)
+        if nouvelle is not None and nouvelle != getattr(doc, champ):
+            diff[champ] = nouvelle if not isinstance(nouvelle, (datetime,)) else nouvelle.isoformat()
+            setattr(doc, champ, nouvelle)
+
+    if not diff:
+        return doc
+
+    doc.updated_by = agent.id
+    await journaliser(
+        db,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        action="document.update",
+        entite="documents",
+        entite_id=doc.id,
+        payload={"diff": diff},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(doc)
+    return doc
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=DocumentLecture,
+    summary="Soft delete d'un document (superviseur)",
+)
+async def supprimer(
+    document_id: int,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Document:
+    doc = await _charger(db, document_id, superviseur.tenant_id)
+
+    # Vérifier l'absence de liens actifs
+    nb_liens = await db.scalar(
+        select(func.count(DocumentSousDossier.document_id)).where(
+            DocumentSousDossier.document_id == doc.id
+        )
+    )
+    if nb_liens and nb_liens > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Ce document est lié à {nb_liens} sous-dossier(s) physique(s). "
+                "Supprime ces liens avant de supprimer le document."
+            ),
+        )
+
+    if doc.supprime:
+        return doc  # idempotent
+
+    doc.supprime = True
+    doc.updated_by = superviseur.id
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="document.supprimer",
+        entite="documents",
+        entite_id=doc.id,
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(doc)
+    return doc
+
+
+# ---------------------------------------------------------------------------
+# Streaming du contenu déchiffré
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{document_id}/contenu",
+    summary="Récupérer le contenu déchiffré (streaming)",
+)
+async def contenu(
+    document_id: int,
+    agent: AgentCourant,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> StreamingResponse:
+    doc = await _charger(db, document_id, agent.tenant_id)
+
+    if doc.statut == "quarantaine":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document en quarantaine — contenu non accessible",
+        )
+    if doc.confidentiel and agent.role.code == "agent_standard":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Document confidentiel — accès restreint",
+        )
+
+    # Audit (un par appel — le déduplication via cache Redis viendra avec PRD-03)
+    await journaliser(
+        db,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        action="document.consulter",
+        entite="documents",
+        entite_id=doc.id,
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+
+    # Disposition selon le type
+    disposition = "inline" if doc.mime.startswith(("application/pdf", "image/")) else "attachment"
+    nom_fichier = doc.titre.replace('"', "").replace("/", "_")[:200]
+
+    return StreamingResponse(
+        stream_dechiffre(doc.chemin_stockage, tenant_id=agent.tenant_id),
+        media_type=doc.mime,
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{nom_fichier}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helpers internes
+# ---------------------------------------------------------------------------
+
+
+async def _charger(db, document_id: int, tenant_id: int) -> Document:
+    """Charge un document non supprimé du tenant courant. HTTP 404 sinon."""
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.tenant_id == tenant_id,
+            Document.supprime.is_(False),
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document introuvable"
+        )
+    return doc

@@ -23,6 +23,10 @@ dependencies = [
   # Worker
   "celery[redis]>=5.4",
   "redis>=5.2",
+  # Stockage / upload
+  "aiofiles>=24.1",
+  "python-multipart>=0.0.12",  # parsing multipart/form-data pour UploadFile
+  "python-magic>=0.4.27",  # détection MIME par contenu (sur Linux/Docker)
   # Ingestion
   "watchdog>=6.0",
   "ocrmypdf>=16.6",
