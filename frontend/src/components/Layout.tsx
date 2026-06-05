@@ -4,12 +4,14 @@ import { Sidebar } from './Sidebar';
 
 export function Layout() {
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-slate-50 bg-gradient-mesh flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 overflow-x-hidden">
-          <Outlet />
+          <div className="animate-fade-in">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

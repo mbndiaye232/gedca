@@ -1,9 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-bg: 248 250 252;
+    --color-fg: 15 23 42;
+  }
+
+  html {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply antialiased;
+    @apply font-sans bg-slate-50 text-slate-900 antialiased;
+  }
+
+  /* Sélection */
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+
+  /* Scrollbars discrètes */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+
+  /* Focus ring uniforme */
+  :focus-visible {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  /* Effet "ring brand" réutilisable */
+  .ring-brand {
+    @apply ring-2 ring-brand-500 ring-offset-2;
+  }
+
+  /* Pastille statut */
+  .dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+}
+
+@layer utilities {
+  /* Texte gradient (titres premium) */
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Effet shimmer (skeleton) */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgb(241 245 249) 0%,
+      rgb(226 232 240) 50%,
+      rgb(241 245 249) 100%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded;
   }
 }
