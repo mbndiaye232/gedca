@@ -2,23 +2,38 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.api.v1 import api_router
 from app.config import get_settings
+from app.services.crypto import ConfigurationCryptoError, _cle_maitre
+
+logger = logging.getLogger("gedca")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Hook de démarrage / arrêt de l'application."""
     settings = get_settings()
-    # TODO: initialiser le pool DB, vérifier la connectivité Redis, etc.
-    _ = settings.deployment_mode
+    # Refuser de démarrer si MASTER_KEY absente ou mal formée — règle PRD-02 §5.1 RG-9
+    try:
+        _cle_maitre()
+    except ConfigurationCryptoError as exc:
+        logger.error("Configuration cryptographique invalide : %s", exc)
+        raise
+    logger.info(
+        "GEDCA démarré (mode=%s, ai_provider=%s, version=%s)",
+        settings.deployment_mode,
+        settings.ai_provider,
+        __version__,
+    )
     yield
-    # TODO: cleanup
+    logger.info("GEDCA arrêté.")
 
 
 app = FastAPI(
@@ -31,14 +46,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — à restreindre en prod
+# CORS — origines listées dans ALLOWED_ORIGINS (virgule-séparées)
+_settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Routes versionnées v1 (préfixe /api)
+app.include_router(api_router)
 
 
 @app.get("/api/health", tags=["santé"])

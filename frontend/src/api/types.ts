@@ -29,6 +29,8 @@ export interface Agent {
   prenom: string;
   email: string | null;
   telephone: string | null;
+  cellulaire: string | null;
+  adresse: string | null;
   fonction: string | null;
   photo_chemin: string | null;
   departement_id: number | null;
@@ -45,6 +47,8 @@ export interface AgentCreation {
   prenom: string;
   email?: string | null;
   telephone?: string | null;
+  cellulaire?: string | null;
+  adresse?: string | null;
   fonction?: string | null;
   departement_id?: number | null;
   role_id: number;
@@ -55,6 +59,8 @@ export interface AgentMiseAJour {
   prenom?: string;
   email?: string | null;
   telephone?: string | null;
+  cellulaire?: string | null;
+  adresse?: string | null;
   fonction?: string | null;
   departement_id?: number | null;
   role_id?: number;
@@ -63,6 +69,8 @@ export interface AgentMiseAJour {
 export interface MonProfilMiseAJour {
   email?: string | null;
   telephone?: string | null;
+  cellulaire?: string | null;
+  adresse?: string | null;
   photo_chemin?: string | null;
   mot_de_passe_actuel?: string;
   nouveau_mot_de_passe?: string;

@@ -14,8 +14,8 @@ from app.config import get_settings
 from app.db import Base
 
 # Importer ici tous les modules de modèles pour qu'Alembic les détecte
-# Exemple à venir :
-# from app.models import tenants, agents, documents, courriers, archivage  # noqa: F401
+# via Base.metadata.
+from app import models  # noqa: F401, E402
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
