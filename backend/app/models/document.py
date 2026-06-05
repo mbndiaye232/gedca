@@ -83,8 +83,9 @@ class Document(Base):
     # En PRD-03 on importera `from pgvector.sqlalchemy import Vector`.
     # embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
 
-    # Métadonnées libres
-    metadata_: Mapped[dict[str, Any]] = mapped_column(
+    # Métadonnées libres. Attribut Python `meta_donnees` pour éviter le clash
+    # avec `Base.metadata` (objet MetaData de SQLAlchemy). Colonne DB = "metadata".
+    meta_donnees: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict, server_default="{}"
     )
     confidentiel: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

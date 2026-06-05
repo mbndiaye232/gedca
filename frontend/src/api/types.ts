@@ -135,6 +135,76 @@ export interface ApiError {
   detail: string;
 }
 
+// ---------------------------------------------------------------------------
+// PRD-02 — Documents et référentiels
+// ---------------------------------------------------------------------------
+
+export interface Document {
+  id: number;
+  titre: string;
+  description: string | null;
+  resume: string | null;
+  mots_cles: string | null;
+  categorie_id: number | null;
+  thematique_id: number | null;
+  type_document_id: number | null;
+  mime: string;
+  taille_octets: number;
+  checksum_sha256: string;
+  date_document: string | null;
+  date_numerisation: string | null;
+  confidentiel: boolean;
+  origine: string;
+  statut: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  created_by: number | null;
+  updated_at: string;
+}
+
+export interface DocumentMetadonnees {
+  titre: string;
+  description?: string | null;
+  resume?: string | null;
+  mots_cles?: string | null;
+  categorie_id: number;
+  thematique_id?: number | null;
+  type_document_id?: number | null;
+  date_document?: string | null;
+  confidentiel?: boolean;
+  sous_dossier_id?: number | null;
+}
+
+export interface DocumentMiseAJour {
+  titre?: string;
+  description?: string | null;
+  resume?: string | null;
+  mots_cles?: string | null;
+  categorie_id?: number | null;
+  thematique_id?: number | null;
+  type_document_id?: number | null;
+  date_document?: string | null;
+  confidentiel?: boolean;
+}
+
+export interface Categorie {
+  id: number;
+  libelle: string;
+  description: string | null;
+  actif: boolean;
+}
+
+export interface CategorieCreation {
+  libelle: string;
+  description?: string | null;
+}
+
+export interface Referentiel {
+  id: number;
+  libelle: string;
+  actif: boolean;
+}
+
 /** Mapping rôle code ↔ role_id côté DB (cohérent avec migration 001). */
 export const ROLE_IDS: Record<Role, number> = {
   superviseur: 1,

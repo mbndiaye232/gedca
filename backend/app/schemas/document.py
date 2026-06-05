@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class DocumentLecture(BaseModel):
     """Sortie standard d'un document (métadonnées, sans le contenu binaire)."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     titre: str
@@ -29,7 +29,8 @@ class DocumentLecture(BaseModel):
     confidentiel: bool
     origine: str
     statut: str
-    metadata_: dict[str, Any] = Field(alias="metadata")
+    # Champ Python `meta_donnees` ↔ clé JSON `metadata` (compat client / vocabulaire métier).
+    meta_donnees: dict[str, Any] = Field(serialization_alias="metadata")
     created_at: datetime
     created_by: int | None
     updated_at: datetime

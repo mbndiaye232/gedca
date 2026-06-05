@@ -42,17 +42,56 @@ class StorageError(RuntimeError):
     """Erreur d'IO ou de chiffrement côté stockage."""
 
 
-def _detecter_mime(plaintext: bytes) -> str:
-    """Détecte le type MIME serveur en inspectant les premiers octets.
+# Signatures binaires des formats courants — suffisent à couvrir l'essentiel
+# sans dépendre de libmagic (utile en dev Windows où la DLL n'est pas livrée).
+_MAGIC_SIGNATURES: tuple[tuple[bytes, str], ...] = (
+    (b"%PDF", "application/pdf"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"BM", "image/bmp"),
+    (b"II*\x00", "image/tiff"),
+    (b"MM\x00*", "image/tiff"),
+    (b"PK\x03\x04", "application/zip"),  # DOCX/XLSX/ODT (raffiné plus bas)
+)
 
-    Utilise `python-magic` si disponible, sinon retourne `application/octet-stream`.
+
+def _detecter_mime(plaintext: bytes) -> str:
+    """Détecte le type MIME en inspectant les premiers octets.
+
+    Stratégie :
+    1. Match d'une signature binaire connue (formats courants).
+    2. Pour les ZIP (`PK\\x03\\x04`), affine en DOCX/XLSX/PPTX/ODT en regardant
+       la structure OOXML/ODF dans les 4 Ko.
+    3. Fallback `python-magic` si libmagic est disponible (Linux/Docker).
+    4. Fallback ultime `application/octet-stream`.
     """
+    tete = plaintext[:4096]
+
+    for signature, mime in _MAGIC_SIGNATURES:
+        if tete.startswith(signature):
+            if mime == "application/zip":
+                if b"word/" in tete:
+                    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                if b"xl/" in tete:
+                    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                if b"ppt/" in tete:
+                    return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                if b"mimetypeapplication/vnd.oasis.opendocument.text" in tete:
+                    return "application/vnd.oasis.opendocument.text"
+            return mime
+
     try:
         import magic  # type: ignore[import-not-found]
 
-        return magic.from_buffer(plaintext[:4096], mime=True) or "application/octet-stream"
-    except (ImportError, Exception):
-        return "application/octet-stream"
+        detecte = magic.from_buffer(tete, mime=True)
+        if detecte:
+            return detecte
+    except Exception:
+        pass
+
+    return "application/octet-stream"
 
 
 def _chemin_chiffre(tenant_id: int, checksum: str) -> Path:
