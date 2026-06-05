@@ -26,7 +26,7 @@ const ENTREES: Entree[] = [
   { vers: '/accueil', libelle: 'Accueil', icone: Home },
   { vers: '/documents', libelle: 'Documents', icone: FileText }, // PRD-02
   { vers: '/courriers', libelle: 'Courriers', icone: Mail }, // PRD-06
-  { vers: '/archivage', libelle: 'Archivage', icone: Archive }, // PRD-05
+  { vers: '/archivage', libelle: 'Archivage', icone: Archive, roles: ['archiviste', 'superviseur'] },
   { vers: '/agents', libelle: 'Agents', icone: Users, roles: ['superviseur'] },
   { vers: '/departements', libelle: 'Départements', icone: Building2, roles: ['superviseur'] },
   { vers: '/structure', libelle: 'Structure', icone: Building2, roles: ['superviseur'] },

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { MapPin, Plus, X } from 'lucide-react';
 import { creerDocument } from '@/api/documents';
 import {
   creerCategorie,
@@ -16,6 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { DropZone } from '@/components/DropZone';
+import { SelecteurEmplacement } from '@/components/SelecteurEmplacement';
 import { extraireMessageErreur } from '@/api/client';
 
 const TAILLE_MAX_MO = 100;
@@ -39,6 +40,12 @@ export default function DocumentNouveau() {
   const [doublonId, setDoublonId] = useState<number | null>(null);
 
   const [modalCategorie, setModalCategorie] = useState(false);
+  const [modalEmplacement, setModalEmplacement] = useState(false);
+  const [emplacement, setEmplacement] = useState<{
+    sousDossierId: number;
+    code: string;
+    libelle: string;
+  } | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
@@ -77,6 +84,7 @@ export default function DocumentNouveau() {
           type_document_id: typeDocumentId ? Number(typeDocumentId) : null,
           date_document: dateDocument || null,
           confidentiel,
+          sous_dossier_id: emplacement?.sousDossierId ?? null,
         },
         (p) => setProgression(p),
       );
@@ -266,6 +274,38 @@ export default function DocumentNouveau() {
               />
               Confidentiel — restreint aux archivistes et superviseurs
             </label>
+
+            {/* Emplacement physique optionnel */}
+            <div className="border-t pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Emplacement physique associé (optionnel)
+              </label>
+              {emplacement ? (
+                <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <MapPin className="h-5 w-5 text-brand-700 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-mono text-gray-700">{emplacement.code}</p>
+                    <p className="text-sm text-gray-900 truncate">{emplacement.libelle}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEmplacement(null)}
+                    className="p-1.5 rounded hover:bg-gray-200 text-gray-500"
+                    title="Désélectionner"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variante="secondaire"
+                  onClick={() => setModalEmplacement(true)}
+                >
+                  <MapPin className="h-4 w-4" /> Choisir un sous-dossier physique
+                </Button>
+              )}
+            </div>
           </CardBody>
         </Card>
 
@@ -308,6 +348,15 @@ export default function DocumentNouveau() {
         onCree={(c) => {
           setCategorieId(String(c.id));
           setModalCategorie(false);
+        }}
+      />
+
+      <SelecteurEmplacement
+        ouvert={modalEmplacement}
+        onFermer={() => setModalEmplacement(false)}
+        onSelectionner={(sousDossierId, code, libelle) => {
+          setEmplacement({ sousDossierId, code, libelle });
+          setModalEmplacement(false);
         }}
       />
     </div>
