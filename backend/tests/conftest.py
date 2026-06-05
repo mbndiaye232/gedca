@@ -47,7 +47,7 @@ from app.api.deps import get_db  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.db import Base  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Agent, Departement, Role, Tenant  # noqa: E402
+from app.models import Agent, Categorie, Departement, Role, Tenant  # noqa: E402
 from app.services.password import hacher_mot_de_passe  # noqa: E402
 
 
@@ -78,7 +78,21 @@ async def _engine():
 
 
 _TABLES_A_TRUNCATE = (
+    # Ordre : tables avec FK d'abord (CASCADE gère le reste)
     "audit_log",
+    "documents_sous_dossiers",
+    "document_versions",
+    "documents",
+    "categories",
+    "thematiques",
+    "types_document",
+    "correspondants",
+    "sous_dossiers",
+    "dossiers_classeurs",
+    "boites",
+    "rayons",
+    "locaux_salles",
+    "sites",
     "agents",
     "departements",
     "tenants",
@@ -158,6 +172,30 @@ async def departement(db: AsyncSession, tenant: Tenant) -> Departement:
     db.add(dep)
     await db.flush()
     return dep
+
+
+@pytest_asyncio.fixture
+async def categorie(db: AsyncSession, tenant: Tenant) -> Categorie:
+    """Catégorie de test (obligatoire pour uploader un document)."""
+    c = Categorie(tenant_id=tenant.id, libelle=f"cat-{secrets.token_hex(3)}")
+    db.add(c)
+    await db.flush()
+    return c
+
+
+@pytest.fixture(autouse=True)
+def storage_dir(tmp_path, monkeypatch):
+    """Isole le stockage des fichiers chiffrés par test (tempdir auto-cleanup).
+
+    autouse=True pour s'appliquer à tous les tests sans dépendance explicite.
+    Vide le cache des Settings pour que le nouveau STORAGE_ROOT soit pris en compte.
+    """
+    racine = tmp_path / "storage"
+    racine.mkdir()
+    monkeypatch.setenv("STORAGE_ROOT", str(racine))
+    get_settings.cache_clear()
+    yield racine
+    get_settings.cache_clear()
 
 
 def _build_agent(
