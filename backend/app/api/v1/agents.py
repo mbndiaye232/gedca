@@ -56,6 +56,10 @@ async def maj_mon_profil(
         agent.email = body.email
     if body.telephone is not None:
         agent.telephone = body.telephone
+    if body.cellulaire is not None:
+        agent.cellulaire = body.cellulaire
+    if body.adresse is not None:
+        agent.adresse = body.adresse
     if body.photo_chemin is not None:
         agent.photo_chemin = body.photo_chemin
 
@@ -132,6 +136,8 @@ async def creer_agent(
         prenom=body.prenom,
         email=body.email,
         telephone=body.telephone,
+        cellulaire=body.cellulaire,
+        adresse=body.adresse,
         fonction=body.fonction,
         departement_id=body.departement_id,
         role_id=body.role_id,
@@ -190,7 +196,17 @@ async def maj_agent(
 ) -> Agent:
     agent = await _charger_agent_du_tenant(db, agent_id, superviseur.tenant_id)
     diff: dict[str, object] = {}
-    for champ in ("nom", "prenom", "email", "telephone", "fonction", "departement_id", "role_id"):
+    for champ in (
+        "nom",
+        "prenom",
+        "email",
+        "telephone",
+        "cellulaire",
+        "adresse",
+        "fonction",
+        "departement_id",
+        "role_id",
+    ):
         nouvelle = getattr(body, champ)
         if nouvelle is not None and nouvelle != getattr(agent, champ):
             diff[champ] = nouvelle

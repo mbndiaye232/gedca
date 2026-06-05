@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -109,6 +110,8 @@ class Agent(Base):
     prenom: Mapped[str] = mapped_column(String(128), nullable=False)
     email: Mapped[str | None] = mapped_column(String(255))
     telephone: Mapped[str | None] = mapped_column(String(64))
+    cellulaire: Mapped[str | None] = mapped_column(String(64))
+    adresse: Mapped[str | None] = mapped_column(Text)
     photo_chemin: Mapped[str | None] = mapped_column(String(512))
     fonction: Mapped[str | None] = mapped_column(String(128))
     departement_id: Mapped[int | None] = mapped_column(

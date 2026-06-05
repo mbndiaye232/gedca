@@ -18,6 +18,10 @@ import asyncio
 import os
 import sys
 
+# Force UTF-8 sur stdout pour éviter UnicodeEncodeError sur la console Windows (cp1252)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from sqlalchemy import select
 
 from app.db import async_session_factory
