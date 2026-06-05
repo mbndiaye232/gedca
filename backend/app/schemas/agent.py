@@ -18,6 +18,8 @@ class AgentLecture(BaseModel):
     prenom: str
     email: str | None
     telephone: str | None
+    cellulaire: str | None
+    adresse: str | None
     fonction: str | None
     photo_chemin: str | None
     departement_id: int | None
@@ -36,6 +38,8 @@ class AgentCreation(BaseModel):
     prenom: str = Field(..., min_length=1, max_length=128)
     email: EmailStr | None = None
     telephone: str | None = Field(None, max_length=64)
+    cellulaire: str | None = Field(None, max_length=64)
+    adresse: str | None = None
     fonction: str | None = Field(None, max_length=128)
     departement_id: int | None = None
     role_id: int
@@ -48,6 +52,8 @@ class AgentMiseAJour(BaseModel):
     prenom: str | None = Field(None, min_length=1, max_length=128)
     email: EmailStr | None = None
     telephone: str | None = Field(None, max_length=64)
+    cellulaire: str | None = Field(None, max_length=64)
+    adresse: str | None = None
     fonction: str | None = Field(None, max_length=128)
     departement_id: int | None = None
     role_id: int | None = None
@@ -58,6 +64,8 @@ class MonProfilMiseAJour(BaseModel):
 
     email: EmailStr | None = None
     telephone: str | None = Field(None, max_length=64)
+    cellulaire: str | None = Field(None, max_length=64)
+    adresse: str | None = None
     photo_chemin: str | None = Field(None, max_length=512)
     mot_de_passe_actuel: str | None = None
     nouveau_mot_de_passe: str | None = Field(None, min_length=8, max_length=255)

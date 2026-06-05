@@ -17,15 +17,19 @@ export default function Profil() {
 
   const [email, setEmail] = useState('');
   const [telephone, setTelephone] = useState('');
+  const [cellulaire, setCellulaire] = useState('');
+  const [adresse, setAdresse] = useState('');
   const [mdpActuel, setMdpActuel] = useState('');
   const [nouveauMdp, setNouveauMdp] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [message, setMessage] = useState<{ type: 'succes' | 'erreur'; text: string } | null>(null);
 
   // Synchroniser les champs quand le profil arrive
-  if (profil && email === '' && telephone === '') {
+  if (profil && email === '' && telephone === '' && cellulaire === '' && adresse === '') {
     setEmail(profil.email ?? '');
     setTelephone(profil.telephone ?? '');
+    setCellulaire(profil.cellulaire ?? '');
+    setAdresse(profil.adresse ?? '');
   }
 
   const mutation = useMutation({
@@ -54,6 +58,8 @@ export default function Profil() {
     const body: Parameters<typeof majMonProfil>[0] = {
       email: email || null,
       telephone: telephone || null,
+      cellulaire: cellulaire || null,
+      adresse: adresse || null,
     };
     if (nouveauMdp) {
       body.mot_de_passe_actuel = mdpActuel;
@@ -104,11 +110,25 @@ export default function Profil() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Téléphone fixe"
+                type="tel"
+                value={telephone}
+                onChange={(e) => setTelephone(e.target.value)}
+              />
+              <Input
+                label="Cellulaire"
+                type="tel"
+                value={cellulaire}
+                onChange={(e) => setCellulaire(e.target.value)}
+              />
+            </div>
             <Input
-              label="Téléphone"
-              type="tel"
-              value={telephone}
-              onChange={(e) => setTelephone(e.target.value)}
+              label="Adresse"
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+              placeholder="Adresse postale"
             />
 
             <div className="border-t pt-4 mt-6">

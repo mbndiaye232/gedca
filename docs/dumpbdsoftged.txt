@@ -1,0 +1,304 @@
+-- Script généré par WinDev le 05/06/2026 13:27:58
+-- Tables de l'analyse SOFTGED.wda
+-- pour SQL générique (ANSI 92)
+
+-- Création de la table actions
+CREATE TABLE "actions" (
+    "IDactions" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) );
+CREATE INDEX "WDIDX_actions_libelle" ON "actions" ("libelle");
+
+-- Création de la table agents
+CREATE TABLE "agents" (
+    "IDagents" INTEGER  PRIMARY KEY ,
+    "prenom" VARCHAR(100) ,
+    "nom" VARCHAR(100) ,
+    "fonctionag" VARCHAR(150) ,
+    "photo" LONGVARBINARY ,
+    "email" VARCHAR(50) ,
+    "adr" VARCHAR(250) ,
+    "tel" VARCHAR(50) ,
+    "cel" VARCHAR(50) ,
+    "npriv" INTEGER ,
+    "IDDepartement" INTEGER ,
+    "cheminphoto" VARCHAR(250) ,
+    "login" VARCHAR(100) );
+CREATE INDEX "WDIDX_agents_prenom" ON "agents" ("prenom");
+CREATE INDEX "WDIDX_agents_nom" ON "agents" ("nom");
+CREATE INDEX "WDIDX_agents_fonctionag" ON "agents" ("fonctionag");
+CREATE INDEX "WDIDX_agents_IDDepartement" ON "agents" ("IDDepartement");
+
+-- Création de la table Boite
+CREATE TABLE "Boite" (
+    "IDBoite" INTEGER  PRIMARY KEY ,
+    "LibelleBoite" VARCHAR(250)  UNIQUE ,
+    "IDRayon" INTEGER ,
+    "chnumboite" VARCHAR(12) ,
+    "NumOrdre" INTEGER );
+CREATE INDEX "WDIDX_Boite_IDRayon" ON "Boite" ("IDRayon");
+CREATE INDEX "WDIDX_Boite_chnumboite" ON "Boite" ("chnumboite");
+
+-- Création de la table categories
+CREATE TABLE "categories" (
+    "IDcategories" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) );
+CREATE INDEX "WDIDX_categories_libelle" ON "categories" ("libelle");
+
+-- Création de la table correspondants
+CREATE TABLE "correspondants" (
+    "IDcorrespondants" INTEGER  PRIMARY KEY ,
+    "nomrs" VARCHAR(150) ,
+    "societe" VARCHAR(50) ,
+    "tel" VARCHAR(50) ,
+    "cel" VARCHAR(50) ,
+    "adr" VARCHAR(250) ,
+    "email" VARCHAR(50) ,
+    "titre" VARCHAR(50) ,
+    "IDtypeexpediteur" INTEGER ,
+    "fax" VARCHAR(20) );
+CREATE INDEX "WDIDX_correspondants_nomrs" ON "correspondants" ("nomrs");
+CREATE INDEX "WDIDX_correspondants_IDtypeexpediteur" ON "correspondants" ("IDtypeexpediteur");
+
+-- Création de la table courriers
+CREATE TABLE "courriers" (
+    "IDcorrespondants" INTEGER ,
+    "IDcourriers" INTEGER  PRIMARY KEY ,
+    "refcourrier" VARCHAR(25) ,
+    "motscles" VARCHAR(350) ,
+    "objetcourrier" VARCHAR(250) ,
+    "datecourrier" DATE ,
+    "datelimite" DATE ,
+    "idtype" INTEGER ,
+    "IDagents" INTEGER ,
+    "valide" BIT ,
+    "IDstatutcourrier" INTEGER ,
+    "IDetatavancement" INTEGER ,
+    "datearrivee" DATE ,
+    "IDcategories" INTEGER ,
+    "chemin" VARCHAR(250) ,
+    "datealerte" DATE ,
+    "IDcourriersrepondu" INTEGER ,
+    "observations" VARCHAR(1000) );
+CREATE INDEX "WDIDX_courriers_IDcorrespondants" ON "courriers" ("IDcorrespondants");
+CREATE INDEX "WDIDX_courriers_refcourrier" ON "courriers" ("refcourrier");
+CREATE INDEX "WDIDX_courriers_objetcourrier" ON "courriers" ("objetcourrier");
+CREATE INDEX "WDIDX_courriers_idtype" ON "courriers" ("idtype");
+CREATE INDEX "WDIDX_courriers_IDagents" ON "courriers" ("IDagents");
+CREATE INDEX "WDIDX_courriers_IDstatutcourrier" ON "courriers" ("IDstatutcourrier");
+CREATE INDEX "WDIDX_courriers_IDetatavancement" ON "courriers" ("IDetatavancement");
+CREATE INDEX "WDIDX_courriers_IDcategories" ON "courriers" ("IDcategories");
+CREATE INDEX "WDIDX_courriers_IDcourriersrepondu" ON "courriers" ("IDcourriersrepondu");
+
+-- Création de la table courrierscopies
+CREATE TABLE "copiescourriers" (
+    "IDcopiescourriers" INTEGER  PRIMARY KEY ,
+    "IDcourriers" INTEGER ,
+    "IDagents" INTEGER ,
+    "datecopie" DATE );
+CREATE INDEX "WDIDX_courrierscopies_IDcourriers" ON "copiescourriers" ("IDcourriers");
+CREATE INDEX "WDIDX_courrierscopies_IDagents" ON "copiescourriers" ("IDagents");
+
+-- Création de la table cryptage
+CREATE TABLE "cryptage" (
+    "IDcryptage" INTEGER  PRIMARY KEY ,
+    "ficcrypt" VARCHAR(250) ,
+    "ficdecrypt" VARCHAR(250) ,
+    "nomagentut" VARCHAR(50) ,
+    "loginagentut" VARCHAR(50) );
+
+-- Création de la table demandevalidation
+CREATE TABLE "demandevalidation" (
+    "IDdemandevalidation" INTEGER  PRIMARY KEY ,
+    "IDagents" INTEGER ,
+    "IDcourriers" INTEGER ,
+    "idagentsdest" INTEGER ,
+    "dateheure" DATE );
+CREATE INDEX "WDIDX_demandevalidation_IDagents" ON "demandevalidation" ("IDagents");
+CREATE INDEX "WDIDX_demandevalidation_IDcourriers" ON "demandevalidation" ("IDcourriers");
+CREATE INDEX "WDIDX_demandevalidation_idagentsdest" ON "demandevalidation" ("idagentsdest");
+
+-- Création de la table Departement
+CREATE TABLE "Departement" (
+    "IDDepartement" INTEGER  PRIMARY KEY ,
+    "libdepartement" VARCHAR(150) );
+CREATE INDEX "WDIDX_Departement_libdepartement" ON "Departement" ("libdepartement");
+
+-- Création de la table documents
+CREATE TABLE "documents" (
+    "IDdocuments" INTEGER  PRIMARY KEY ,
+    "chemin" VARCHAR(250) ,
+    "IDcourriers" INTEGER ,
+    "motscles" VARCHAR(350) ,
+    "description" VARCHAR(250) ,
+    "IDagents" INTEGER ,
+    "datedoc" DATE ,
+    "titredoc" VARCHAR(150) ,
+    "IDcategories" INTEGER ,
+    "contdoc" VARCHAR(65534) ,
+    "IDSousDossiers" INTEGER ,
+    "chnumdocument" VARCHAR(22) );
+CREATE INDEX "WDIDX_documents_IDcourriers" ON "documents" ("IDcourriers");
+CREATE INDEX "WDIDX_documents_description" ON "documents" ("description");
+CREATE INDEX "WDIDX_documents_IDagents" ON "documents" ("IDagents");
+CREATE INDEX "WDIDX_documents_titredoc" ON "documents" ("titredoc");
+CREATE INDEX "WDIDX_documents_IDcategories" ON "documents" ("IDcategories");
+CREATE INDEX "WDIDX_documents_IDSousDossiers" ON "documents" ("IDSousDossiers");
+CREATE INDEX "WDIDX_documents_chnumdocument" ON "documents" ("chnumdocument");
+
+-- Création de la table DossiersClasseurs
+CREATE TABLE "DossiersClasseurs" (
+    "IDDossiersClasseurs" INTEGER  PRIMARY KEY ,
+    "LibelleDossiersClasseurs" VARCHAR(250) ,
+    "IDBoite" INTEGER ,
+    "chnumdossier" VARCHAR(15) ,
+    "NumOrdre" INTEGER );
+CREATE INDEX "WDIDX_DossiersClasseurs_LibelleDossiersClasseurs" ON "DossiersClasseurs" ("LibelleDossiersClasseurs");
+CREATE INDEX "WDIDX_DossiersClasseurs_IDBoite" ON "DossiersClasseurs" ("IDBoite");
+CREATE INDEX "WDIDX_DossiersClasseurs_chnumdossier" ON "DossiersClasseurs" ("chnumdossier");
+
+-- Création de la table etatavancement
+CREATE TABLE "etatavancement" (
+    "IDetatavancement" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) ,
+    "observations" VARCHAR(1500) );
+
+-- Création de la table historique
+CREATE TABLE "historiques" (
+    "IDhistoriques" INTEGER  PRIMARY KEY ,
+    "IDagents" INTEGER ,
+    "IDcourriers" INTEGER ,
+    "IDactions" INTEGER ,
+    "date" DATE );
+CREATE INDEX "WDIDX_historique_IDagents" ON "historiques" ("IDagents");
+CREATE INDEX "WDIDX_historique_IDcourriers" ON "historiques" ("IDcourriers");
+CREATE INDEX "WDIDX_historique_IDactions" ON "historiques" ("IDactions");
+
+-- Création de la table LocalSalle
+CREATE TABLE "LocalSalle" (
+    "IDLocalSalle" INTEGER  PRIMARY KEY ,
+    "LibelleLoàcalSalle" VARCHAR(250) ,
+    "IDSite" INTEGER ,
+    "chnumlocal" VARCHAR(50) ,
+    "NumOrdre" INTEGER );
+CREATE INDEX "WDIDX_LocalSalle_LibelleLoàcalSalle" ON "LocalSalle" ("LibelleLoàcalSalle");
+CREATE INDEX "WDIDX_LocalSalle_IDSite" ON "LocalSalle" ("IDSite");
+CREATE INDEX "WDIDX_LocalSalle_chnumlocal" ON "LocalSalle" ("chnumlocal");
+
+-- Création de la table notes
+CREATE TABLE "notes" (
+    "IDnotes" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) ,
+    "IDagents" INTEGER ,
+    "datenote" DATE ,
+    "IDcourriers" INTEGER );
+CREATE INDEX "WDIDX_notes_IDagents" ON "notes" ("IDagents");
+CREATE INDEX "WDIDX_notes_IDcourriers" ON "notes" ("IDcourriers");
+
+-- Création de la table paramail_
+CREATE TABLE "paramail_" (
+    "IDparamail_" INTEGER  PRIMARY KEY ,
+    "mailut" VARCHAR(150) ,
+    "mp" VARCHAR(150) ,
+    "spop" VARCHAR(150) ,
+    "ssmtp" VARCHAR(150) ,
+    "numportsmtp" INTEGER ,
+    "imapentrant" VARCHAR(150) ,
+    "numportimapentrant" INTEGER ,
+    "imapsortant" VARCHAR(150) ,
+    "numportimapsortant" INTEGER ,
+    "numeroportpop3" INTEGER );
+
+-- Création de la table Rayon
+CREATE TABLE "Rayon" (
+    "IDRayon" INTEGER  PRIMARY KEY ,
+    "LiibelleRayon" VARCHAR(250) ,
+    "IDLocalSalle" INTEGER ,
+    "chnumrayon" VARCHAR(8) ,
+    "NumOrdre" INTEGER );
+CREATE INDEX "WDIDX_Rayon_LiibelleRayon" ON "Rayon" ("LiibelleRayon");
+CREATE INDEX "WDIDX_Rayon_IDLocalSalle" ON "Rayon" ("IDLocalSalle");
+CREATE INDEX "WDIDX_Rayon_chnumrayon" ON "Rayon" ("chnumrayon");
+
+-- Création de la table redirection
+CREATE TABLE "redirection" (
+    "IDredirection" INTEGER  PRIMARY KEY ,
+    "IDagents" INTEGER ,
+    "idagentsred" INTEGER ,
+    "datered" DATE ,
+    "datefinred" DATE ,
+    "redactive" BIT );
+CREATE INDEX "WDIDX_redirection_IDagents" ON "redirection" ("IDagents");
+CREATE INDEX "WDIDX_redirection_idagentsred" ON "redirection" ("idagentsred");
+
+-- Création de la table Site
+CREATE TABLE "Site" (
+    "IDSite" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) ,
+    "chnumsite" VARCHAR(2) );
+CREATE INDEX "WDIDX_Site_libelle" ON "Site" ("libelle");
+CREATE INDEX "WDIDX_Site_chnumsite" ON "Site" ("chnumsite");
+
+-- Création de la table SousDossiers
+CREATE TABLE "SousDossiers" (
+    "IDSousDossiers" INTEGER  PRIMARY KEY ,
+    "LibelleSousDossier" VARCHAR(250) ,
+    "IDDossiersClasseurs" INTEGER ,
+    "chnumsousdossier" VARCHAR(18) ,
+    "NumOrdre" INTEGER );
+CREATE INDEX "WDIDX_SousDossiers_LibelleSousDossier" ON "SousDossiers" ("LibelleSousDossier");
+CREATE INDEX "WDIDX_SousDossiers_IDDossiersClasseurs" ON "SousDossiers" ("IDDossiersClasseurs");
+CREATE INDEX "WDIDX_SousDossiers_chnumsousdossier" ON "SousDossiers" ("chnumsousdossier");
+
+-- Création de la table statutcourrier
+CREATE TABLE "statutcourrier" (
+    "IDstatutcourrier" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) );
+
+-- Création de la table structur
+CREATE TABLE "structur" (
+    "IDSalon" INTEGER  PRIMARY KEY ,
+    "Nom" VARCHAR(100) ,
+    "adr" VARCHAR(100) ,
+    "tel" VARCHAR(15) ,
+    "cel" VARCHAR(15) ,
+    "Email" VARCHAR(75) ,
+    "logo" LONGVARBINARY ,
+    "cheminlogo" VARCHAR(255) ,
+    "fax" VARCHAR(20) ,
+    "dateenv" DATE );
+
+-- Création de la table type
+CREATE TABLE "type" (
+    "IDtype" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) );
+
+-- Création de la table typeexpediteur
+CREATE TABLE "typeexpediteur" (
+    "IDtypeexpediteur" INTEGER  PRIMARY KEY ,
+    "libelle" VARCHAR(250) );
+-- Contraintes d'intégrité
+ALTER TABLE "courriers" ADD FOREIGN KEY ("IDcategories") REFERENCES "categories" ("IDcategories");
+ALTER TABLE "courriers" ADD FOREIGN KEY ("IDcorrespondants") REFERENCES "correspondants" ("IDcorrespondants");
+ALTER TABLE "agents" ADD FOREIGN KEY ("IDDepartement") REFERENCES "Departement" ("IDDepartement");
+ALTER TABLE "courriers" ADD FOREIGN KEY ("IDstatutcourrier") REFERENCES "statutcourrier" ("IDstatutcourrier");
+ALTER TABLE "notes" ADD FOREIGN KEY ("IDcourriers") REFERENCES "courriers" ("IDcourriers");
+ALTER TABLE "courriers" ADD FOREIGN KEY ("IDetatavancement") REFERENCES "etatavancement" ("IDetatavancement");
+ALTER TABLE "courriers" ADD FOREIGN KEY ("idtype") REFERENCES "type" ("IDtype");
+ALTER TABLE "Boite" ADD FOREIGN KEY ("IDRayon") REFERENCES "Rayon" ("IDRayon");
+ALTER TABLE "Rayon" ADD FOREIGN KEY ("IDLocalSalle") REFERENCES "LocalSalle" ("IDLocalSalle");
+ALTER TABLE "LocalSalle" ADD FOREIGN KEY ("IDSite") REFERENCES "Site" ("IDSite");
+ALTER TABLE "courriers" ADD FOREIGN KEY ("IDagents") REFERENCES "agents" ("IDagents");
+ALTER TABLE "redirection" ADD FOREIGN KEY ("idagentsred") REFERENCES "agents" ("IDagents");
+ALTER TABLE "notes" ADD FOREIGN KEY ("IDagents") REFERENCES "agents" ("IDagents");
+ALTER TABLE "historiques" ADD FOREIGN KEY ("IDactions") REFERENCES "actions" ("IDactions");
+ALTER TABLE "historiques" ADD FOREIGN KEY ("IDcourriers") REFERENCES "courriers" ("IDcourriers");
+ALTER TABLE "historiques" ADD FOREIGN KEY ("IDagents") REFERENCES "agents" ("IDagents");
+ALTER TABLE "copiescourriers" ADD FOREIGN KEY ("IDagents") REFERENCES "agents" ("IDagents");
+ALTER TABLE "copiescourriers" ADD FOREIGN KEY ("IDcourriers") REFERENCES "courriers" ("IDcourriers");
+ALTER TABLE "demandevalidation" ADD FOREIGN KEY ("IDagents") REFERENCES "agents" ("IDagents");
+ALTER TABLE "demandevalidation" ADD FOREIGN KEY ("IDcourriers") REFERENCES "courriers" ("IDcourriers");
+ALTER TABLE "documents" ADD FOREIGN KEY ("IDcourriers") REFERENCES "courriers" ("IDcourriers");
+ALTER TABLE "documents" ADD FOREIGN KEY ("IDSousDossiers") REFERENCES "SousDossiers" ("IDSousDossiers");
+ALTER TABLE "SousDossiers" ADD FOREIGN KEY ("IDDossiersClasseurs") REFERENCES "DossiersClasseurs" ("IDDossiersClasseurs");
+ALTER TABLE "DossiersClasseurs" ADD FOREIGN KEY ("IDBoite") REFERENCES "Boite" ("IDBoite");
+ 

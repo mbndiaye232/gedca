@@ -104,7 +104,9 @@ CREATE TABLE agents (
   nom             VARCHAR(128) NOT NULL,
   prenom          VARCHAR(128) NOT NULL,
   email           VARCHAR(255),
-  telephone       VARCHAR(64),
+  telephone       VARCHAR(64),                           -- fixe
+  cellulaire      VARCHAR(64),                           -- mobile (`cel` dans la base d'origine)
+  adresse         TEXT,                                  -- adresse postale (`adr` dans la base d'origine)
   photo_chemin    TEXT,                                  -- non chiffré (avatar)
   fonction        VARCHAR(128),
   departement_id  BIGINT REFERENCES departements(id),
@@ -651,26 +653,29 @@ Les migrations sont alignées sur le découpage en PRD. Chaque migration est nom
 1. Extensions PostgreSQL (`pgcrypto`, `pg_trgm`, `unaccent`, `vector`) + configuration FTS `french_unaccent`.
 2. Référentiels statiques : `roles`, `types_correspondant`.
 3. `tenants`.
-4. `departements`, `agents`.
+4. `departements`, `agents` (version initiale sans `cellulaire` ni `adresse`).
 5. `audit_log`.
-6. Seed : rôles, types correspondant, tenant de test, agent superviseur initial.
+6. Seed : rôles, types correspondant.
 
-### Migration 002 — Stockage et archivage physique (PRD-02)
-7. `categories`, `thematiques`, `types_document`, `correspondants`.
-8. `documents`, `document_versions`, trigger FTS.
-9. **Archivage physique** (toutes les tables, vides — peuplées au runtime par PRD-05) :
-   `sites` → `locaux_salles` → `rayons` → `boites` → `dossiers_classeurs` → `sous_dossiers` → `documents_sous_dossiers` + vue `v_sous_dossiers_code`.
+### Migration 002 — Compléments PRD-01 (alignement base d'origine)
+7. `ALTER TABLE agents` : ajout de `cellulaire VARCHAR(64)` et `adresse TEXT` (cf. `docs/reconciliation-bdsoftged.md`).
+
+### Migration 003 — Stockage et archivage physique (PRD-02)
+8. `categories`, `thematiques`, `types_document`, `correspondants`.
+9. `documents`, `document_versions`, trigger FTS.
+10. **Archivage physique** (toutes les tables, vides — peuplées au runtime par PRD-05) :
+    `sites` → `locaux_salles` → `rayons` → `boites` → `dossiers_classeurs` → `sous_dossiers` → `documents_sous_dossiers` + vue `v_sous_dossiers_code`.
 
 > **Choix** : créer les 6 tables d'archivage dès cette migration permet à `documents_sous_dossiers` d'avoir une FK propre sans `DEFERRABLE`. PRD-05 n'ajoute aucune migration de schéma, juste les routes et l'UI.
 
-### Migration 003 — Pipeline ingestion (PRD-03)
-10. `ALTER TABLE tenants` — ajout des colonnes IMAP (`imap_host`, `imap_port`, `imap_user`, `imap_password_enc`, `imap_folder`, `imap_actif`, `imap_dernier_uid`).
-11. `imap_pieces_jointes` — métadonnées des pièces jointes en attente d'intégration (le contenu binaire est stocké sur disque chiffré, pas en base — voir PRD-03 §5.8).
-12. `statuts_courrier`, `etats_avancement` — référentiels (créés ici car référencés par GEC ensuite).
+### Migration 004 — Pipeline ingestion (PRD-03)
+11. `ALTER TABLE tenants` — ajout des colonnes IMAP (`imap_host`, `imap_port`, `imap_user`, `imap_password_enc`, `imap_folder`, `imap_actif`, `imap_dernier_uid`).
+12. `imap_pieces_jointes` — métadonnées des pièces jointes en attente d'intégration (le contenu binaire est stocké sur disque chiffré, pas en base — voir PRD-03 §5.8).
+13. `statuts_courrier`, `etats_avancement` — référentiels (créés ici car référencés par GEC ensuite).
 
-### Migration 004 — GEC (PRD-06)
-13. `courriers`, `copies_courriers`, `imputations`, `demandes_validation`, `notes_courrier`, `historiques_courrier`, `documents_courrier`, `redirections`, `alertes_envoyees`.
-14. Vues utilitaires : `v_courriers_agent`.
+### Migration 005 — GEC (PRD-06)
+14. `courriers`, `copies_courriers`, `imputations`, `demandes_validation`, `notes_courrier`, `historiques_courrier`, `documents_courrier`, `redirections`, `alertes_envoyees`.
+15. Vues utilitaires : `v_courriers_agent`.
 
 ### Migrations ultérieures
 - PRD-07 (IA avancée) : éventuelles tables de suggestions / cache.

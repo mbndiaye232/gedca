@@ -166,6 +166,8 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
   const [prenom, setPrenom] = useState(agent?.prenom ?? '');
   const [email, setEmail] = useState(agent?.email ?? '');
   const [telephone, setTelephone] = useState(agent?.telephone ?? '');
+  const [cellulaire, setCellulaire] = useState(agent?.cellulaire ?? '');
+  const [adresse, setAdresse] = useState(agent?.adresse ?? '');
   const [fonction, setFonction] = useState(agent?.fonction ?? '');
   const [departementId, setDepartementId] = useState<string>(
     agent?.departement_id ? String(agent.departement_id) : '',
@@ -180,6 +182,8 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
     setPrenom(agent.prenom);
     setEmail(agent.email ?? '');
     setTelephone(agent.telephone ?? '');
+    setCellulaire(agent.cellulaire ?? '');
+    setAdresse(agent.adresse ?? '');
     setFonction(agent.fonction ?? '');
     setDepartementId(agent.departement_id ? String(agent.departement_id) : '');
     setRole(roleFromId(agent.role_id));
@@ -217,6 +221,8 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
           prenom,
           email: email || null,
           telephone: telephone || null,
+          cellulaire: cellulaire || null,
+          adresse: adresse || null,
           fonction: fonction || null,
           departement_id: departementId ? Number(departementId) : null,
           role_id: ROLE_IDS[role],
@@ -230,6 +236,8 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
         prenom,
         email: email || null,
         telephone: telephone || null,
+        cellulaire: cellulaire || null,
+        adresse: adresse || null,
         fonction: fonction || null,
         departement_id: departementId ? Number(departementId) : null,
         role_id: ROLE_IDS[role],
@@ -282,16 +290,30 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
             onChange={(e) => setEmail(e.target.value)}
           />
           <Input
-            label="Téléphone"
+            label="Téléphone fixe"
             type="tel"
             value={telephone}
             onChange={(e) => setTelephone(e.target.value)}
+          />
+          <Input
+            label="Cellulaire"
+            type="tel"
+            value={cellulaire}
+            onChange={(e) => setCellulaire(e.target.value)}
           />
           <Input
             label="Fonction"
             value={fonction}
             onChange={(e) => setFonction(e.target.value)}
           />
+          <div className="col-span-2">
+            <Input
+              label="Adresse"
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+              placeholder="Adresse postale"
+            />
+          </div>
           <Select
             label="Département"
             value={departementId}
