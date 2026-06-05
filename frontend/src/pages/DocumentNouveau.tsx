@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { DropZone } from '@/components/DropZone';
 import { extraireMessageErreur } from '@/api/client';
 
@@ -118,12 +119,10 @@ export default function DocumentNouveau() {
 
   return (
     <div className="p-6 max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Nouveau document</h1>
-        <p className="text-gray-600 text-sm mt-1">
-          Le fichier sera chiffré au repos et indexé pour la recherche plein texte.
-        </p>
-      </div>
+      <PageHeader
+        titre="Nouveau document"
+        sousTitre="Le fichier sera chiffré au repos et indexé pour la recherche plein texte."
+      />
 
       <form onSubmit={onSubmit} className="space-y-6">
         {/* Fichier */}
