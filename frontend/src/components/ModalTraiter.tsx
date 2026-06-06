@@ -786,9 +786,11 @@ function ModalRepondre({
         }}
         className="space-y-4"
       >
-        <p className="text-xs text-slate-500">
-          Cette réponse sera enregistrée comme un courrier sortant lié au courrier d'origine.
-        </p>
+        <div className="rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-xs text-sky-900">
+          <strong>Réponse</strong> = nouveau courrier sortant lié à l'origine. Le document original
+          reste attaché au courrier d'origine — tu joins ci-dessous{' '}
+          <strong>le document de ta réponse</strong>.
+        </div>
         <Input label="Objet *" value={objet} onChange={(e) => setObjet(e.target.value)} required />
         <Select
           label="Agent qui porte la réponse *"
@@ -816,7 +818,17 @@ function ModalRepondre({
             </option>
           ))}
         </Select>
-        <DropZone fichier={fichier} onChange={setFichier} tailleMaxMo={100} />
+        <div>
+          <label className="block text-xs font-medium text-slate-700 tracking-wide mb-1.5">
+            Document de la réponse *
+          </label>
+          <DropZone
+            fichier={fichier}
+            onChange={setFichier}
+            tailleMaxMo={100}
+            invite="Glisse ici le PDF / Word de ta réponse"
+          />
+        </div>
         {erreur && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {erreur}
