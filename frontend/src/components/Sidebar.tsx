@@ -10,6 +10,7 @@ import {
   ListChecks,
   LayoutGrid,
   Settings,
+  Tags,
   type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/api/types';
@@ -47,6 +48,7 @@ const GROUPES: Groupe[] = [
         icone: Archive,
         roles: ['archiviste', 'superviseur'],
       },
+      { vers: '/referentiels', libelle: 'Catégories / types', icone: Tags, roles: ['superviseur'] },
       { vers: '/departements', libelle: 'Départements', icone: LayoutGrid, roles: ['superviseur'] },
     ],
   },

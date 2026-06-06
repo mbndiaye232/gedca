@@ -11,6 +11,7 @@ import AuditLog from './pages/AuditLog';
 import Documents from './pages/Documents';
 import DocumentNouveau from './pages/DocumentNouveau';
 import Archivage from './pages/Archivage';
+import Referentiels from './pages/Referentiels';
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/agents" element={<Agents />} />
           <Route path="/departements" element={<Departements />} />
+          <Route path="/referentiels" element={<Referentiels />} />
           <Route path="/structure" element={<Structure />} />
           <Route path="/audit-log" element={<AuditLog />} />
         </Route>

@@ -31,3 +31,12 @@ class ReferentielLecture(BaseModel):
 
 class ReferentielCreation(BaseModel):
     libelle: str = Field(..., min_length=1, max_length=128)
+
+
+class CategorieMiseAJour(BaseModel):
+    libelle: str | None = Field(None, min_length=1, max_length=128)
+    description: str | None = Field(None, max_length=512)
+
+
+class ReferentielMiseAJour(BaseModel):
+    libelle: str = Field(..., min_length=1, max_length=128)
