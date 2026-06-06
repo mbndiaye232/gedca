@@ -12,6 +12,8 @@ import Documents from './pages/Documents';
 import DocumentNouveau from './pages/DocumentNouveau';
 import Archivage from './pages/Archivage';
 import Referentiels from './pages/Referentiels';
+import Courriers from './pages/Courriers';
+import CourrierNouveau from './pages/CourrierNouveau';
 
 export default function App() {
   return (
@@ -25,6 +27,8 @@ export default function App() {
           <Route path="/accueil" element={<Accueil />} />
           <Route path="/profil" element={<Profil />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/courriers" element={<Courriers />} />
+          <Route path="/courriers/nouveau" element={<CourrierNouveau />} />
         </Route>
       </Route>
 
