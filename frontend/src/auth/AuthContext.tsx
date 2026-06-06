@@ -1,4 +1,5 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   clearToken,
   getStoredAgent,
@@ -20,6 +21,7 @@ interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [agent, setAgent] = useState<AgentSession | null>(() => getStoredAgent<AgentSession>());
   const [enChargement, setEnChargement] = useState(false);
 
@@ -30,17 +32,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const connecter = useCallback(async (login: string, motDePasse: string) => {
-    setEnChargement(true);
-    try {
-      const reponse = await authApi.login(login, motDePasse);
-      setToken(reponse.access_token);
-      setStoredAgent(reponse.agent);
-      setAgent(reponse.agent);
-    } finally {
-      setEnChargement(false);
-    }
-  }, []);
+  const connecter = useCallback(
+    async (login: string, motDePasse: string) => {
+      setEnChargement(true);
+      try {
+        const reponse = await authApi.login(login, motDePasse);
+        setToken(reponse.access_token);
+        setStoredAgent(reponse.agent);
+        setAgent(reponse.agent);
+        // CRITIQUE : purger le cache React Query — sinon les données du
+        // précédent utilisateur restent visibles tant qu'elles ne sont pas
+        // explicitement réinvalidées (fuite cross-session).
+        queryClient.clear();
+      } finally {
+        setEnChargement(false);
+      }
+    },
+    [queryClient],
+  );
 
   const deconnecter = useCallback(async () => {
     setEnChargement(true);
@@ -53,9 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearToken();
       setAgent(null);
+      // Purge cache au logout pour ne rien laisser fuiter à la prochaine session.
+      queryClient.clear();
       setEnChargement(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

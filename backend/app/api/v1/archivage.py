@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import (
     AgentArchivisteOuPlus,
@@ -160,6 +161,33 @@ async def _maj_libelle_et_description(
     return diff
 
 
+async def _flush_ou_409(db, type_emplacement: str) -> None:
+    """Flush la session, traduit toute violation UNIQUE en HTTP 409 lisible.
+
+    Couvre deux cas :
+    - Doublon de libellé au sein du même parent (contrainte ajoutée en migration 004)
+    - Doublon de numero (théoriquement impossible avec prochain_numero + FOR UPDATE,
+      mais on intercepte par sécurité)
+    """
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        msg = str(getattr(exc, "orig", "") or "").lower()
+        if "libelle" in msg or "_libelle" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Un {type_emplacement} avec ce libellé existe déjà "
+                    "à cet emplacement."
+                ),
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflit lors de la création du {type_emplacement}.",
+        ) from exc
+
+
 # ============================================================================
 # 1. Sites
 # ============================================================================
@@ -200,7 +228,7 @@ async def creer_site(
         description=body.description,
     )
     db.add(site)
-    await db.flush()
+    await _flush_ou_409(db, "site")
     await journaliser(
         db,
         tenant_id=archiviste.tenant_id,
@@ -229,6 +257,7 @@ async def maj_site(
     site = await _charger_site(db, site_id, archiviste.tenant_id)
     diff = await _maj_libelle_et_description(site, body)
     if diff:
+        await _flush_ou_409(db, "site")
         await journaliser(
             db,
             tenant_id=archiviste.tenant_id,
@@ -316,7 +345,7 @@ async def creer_local(
         libelle=body.libelle, description=body.description,
     )
     db.add(loc)
-    await db.flush()
+    await _flush_ou_409(db, "local")
     await journaliser(
         db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
         action="archivage.local.create", entite="locaux_salles", entite_id=loc.id,
@@ -337,6 +366,7 @@ async def maj_local(
     loc = await _charger_local(db, local_id, archiviste.tenant_id)
     diff = await _maj_libelle_et_description(loc, body)
     if diff:
+        await _flush_ou_409(db, "local")
         await journaliser(
             db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
             action="archivage.local.update", entite="locaux_salles", entite_id=loc.id,
@@ -397,7 +427,7 @@ async def creer_rayon(
     )
     r = Rayon(local_id=body.local_id, numero=numero, libelle=body.libelle)
     db.add(r)
-    await db.flush()
+    await _flush_ou_409(db, "rayon")
     await journaliser(
         db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
         action="archivage.rayon.create", entite="rayons", entite_id=r.id,
@@ -418,6 +448,7 @@ async def maj_rayon(
     r = await _charger_rayon(db, rayon_id, archiviste.tenant_id)
     diff = await _maj_libelle_et_description(r, body)
     if diff:
+        await _flush_ou_409(db, "rayon")
         await journaliser(
             db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
             action="archivage.rayon.update", entite="rayons", entite_id=r.id,
@@ -478,7 +509,7 @@ async def creer_boite(
     )
     b = Boite(rayon_id=body.rayon_id, numero=numero, libelle=body.libelle)
     db.add(b)
-    await db.flush()
+    await _flush_ou_409(db, "boîte")
     await journaliser(
         db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
         action="archivage.boite.create", entite="boites", entite_id=b.id,
@@ -499,6 +530,7 @@ async def maj_boite(
     b = await _charger_boite(db, boite_id, archiviste.tenant_id)
     diff = await _maj_libelle_et_description(b, body)
     if diff:
+        await _flush_ou_409(db, "boîte")
         await journaliser(
             db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
             action="archivage.boite.update", entite="boites", entite_id=b.id,
@@ -563,7 +595,7 @@ async def creer_dossier(
     )
     d = DossierClasseur(boite_id=body.boite_id, numero=numero, libelle=body.libelle)
     db.add(d)
-    await db.flush()
+    await _flush_ou_409(db, "dossier")
     await journaliser(
         db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
         action="archivage.dossier.create", entite="dossiers_classeurs", entite_id=d.id,
@@ -584,6 +616,7 @@ async def maj_dossier(
     d = await _charger_dossier(db, dossier_id, archiviste.tenant_id)
     diff = await _maj_libelle_et_description(d, body)
     if diff:
+        await _flush_ou_409(db, "dossier")
         await journaliser(
             db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
             action="archivage.dossier.update", entite="dossiers_classeurs",
@@ -652,7 +685,7 @@ async def creer_sous_dossier(
     )
     sd = SousDossier(dossier_id=body.dossier_id, numero=numero, libelle=body.libelle)
     db.add(sd)
-    await db.flush()
+    await _flush_ou_409(db, "sous-dossier")
     await journaliser(
         db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
         action="archivage.sous_dossier.create", entite="sous_dossiers",
@@ -674,6 +707,7 @@ async def maj_sous_dossier(
     sd = await _charger_sous_dossier(db, sd_id, archiviste.tenant_id)
     diff = await _maj_libelle_et_description(sd, body)
     if diff:
+        await _flush_ou_409(db, "sous-dossier")
         await journaliser(
             db, tenant_id=archiviste.tenant_id, agent_id=archiviste.id,
             action="archivage.sous_dossier.update", entite="sous_dossiers",

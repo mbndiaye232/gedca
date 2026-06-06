@@ -139,6 +139,17 @@ export interface ApiError {
 // PRD-02 — Documents et référentiels
 // ---------------------------------------------------------------------------
 
+export interface EmplacementResume {
+  sous_dossier_id: number;
+  code_complet: string;
+  site: NiveauResume;
+  local: NiveauResume;
+  rayon: NiveauResume;
+  boite: NiveauResume;
+  dossier: NiveauResume;
+  sous_dossier: NiveauResume;
+}
+
 export interface Document {
   id: number;
   titre: string;
@@ -157,6 +168,7 @@ export interface Document {
   origine: string;
   statut: string;
   metadata: Record<string, unknown>;
+  emplacement: EmplacementResume | null;
   created_at: string;
   created_by: number | null;
   updated_at: string;
@@ -271,4 +283,166 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export function roleFromId(roleId: number): Role {
   return (Object.entries(ROLE_IDS).find(([, id]) => id === roleId)?.[0] ?? 'agent_standard') as Role;
+}
+
+// ---------------------------------------------------------------------------
+// Correspondants
+// ---------------------------------------------------------------------------
+
+export interface Correspondant {
+  id: number;
+  type_id: number;
+  raison_sociale: string | null;
+  civilite: string | null;
+  nom: string | null;
+  prenom: string | null;
+  fonction: string | null;
+  adresse: string | null;
+  telephone: string | null;
+  email: string | null;
+  actif: boolean;
+}
+
+export interface CorrespondantCreation {
+  type_id: number;
+  raison_sociale?: string | null;
+  civilite?: string | null;
+  nom?: string | null;
+  prenom?: string | null;
+  fonction?: string | null;
+  adresse?: string | null;
+  telephone?: string | null;
+  email?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// PRD-06A — Courriers
+// ---------------------------------------------------------------------------
+
+export type SensCourrier = 'entrant' | 'sortant' | 'interne';
+
+export type CorbeilleCode =
+  | 'a_traiter'
+  | 'traite'
+  | 'en_copie'
+  | 'en_retard'
+  | 'a_valider'
+  | 'valides'
+  | 'a_faire_valider'
+  | 'en_validation';
+
+export interface CompteurCorbeille {
+  code: CorbeilleCode;
+  libelle: string;
+  compteur: number;
+  actif_en_06a: boolean;
+}
+
+export interface CompteursCorbeilles {
+  corbeilles: CompteurCorbeille[];
+}
+
+export interface StatutCourrierLecture {
+  id: number;
+  code: string;
+  libelle: string;
+}
+
+export interface ActionCourrierLecture {
+  id: number;
+  code: string;
+  libelle: string;
+}
+
+export interface AgentResume {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string | null;
+}
+
+export interface CorrespondantResume {
+  id: number;
+  raison_sociale: string | null;
+  nom: string | null;
+  prenom: string | null;
+}
+
+export interface NoteCourrier {
+  id: number;
+  agent_id: number | null;
+  contenu: string;
+  created_at: string;
+}
+
+export interface HistoriqueCourrier {
+  id: number;
+  agent_id: number | null;
+  action: ActionCourrierLecture;
+  payload: Record<string, unknown>;
+  ts: string;
+}
+
+export interface Courrier {
+  id: number;
+  numero_enregistrement: string;
+  sens: SensCourrier;
+  ref_externe: string | null;
+  categorie_id: number | null;
+  objet: string;
+  mots_cles: string | null;
+  observations: string | null;
+  date_courrier: string | null;
+  date_arrivee: string | null;
+  date_limite: string | null;
+  correspondant_id: number | null;
+  correspondant: CorrespondantResume | null;
+  agent_destinataire_id: number;
+  agent_proprietaire_id: number;
+  departement_destinataire_id: number | null;
+  document_principal_id: number;
+  statut: StatutCourrierLecture;
+  courrier_origine_id: number | null;
+  created_at: string;
+  created_by: number | null;
+  updated_at: string;
+}
+
+export interface CourrierDetail extends Courrier {
+  copies: AgentResume[];
+  notes: NoteCourrier[];
+  historique: HistoriqueCourrier[];
+  pieces_additionnelles: number[];
+}
+
+export interface CourrierCreationBody {
+  sens: SensCourrier;
+  ref_externe?: string | null;
+  categorie_id?: number | null;
+  objet: string;
+  mots_cles?: string | null;
+  observations?: string | null;
+  date_courrier?: string | null;
+  date_arrivee?: string | null;
+  date_limite?: string | null;
+  correspondant_id?: number | null;
+  departement_destinataire_id?: number | null;
+  agent_destinataire_id: number;
+  document_titre: string;
+  document_categorie_id: number;
+}
+
+export interface RepondreBody {
+  objet: string;
+  mots_cles?: string | null;
+  observations?: string | null;
+  date_limite?: string | null;
+  correspondant_id?: number | null;
+  // Optionnel : si non fourni, le backend remonte la réponse à l'agent
+  // qui m'a imputé le courrier (ou me la laisse si je suis le proprio
+  // d'origine).
+  agent_destinataire_id?: number | null;
+  departement_destinataire_id?: number | null;
+  document_titre: string;
+  document_categorie_id: number;
 }
