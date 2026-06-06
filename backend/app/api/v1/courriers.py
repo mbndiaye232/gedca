@@ -1019,6 +1019,10 @@ async def repondre(
     db.add(reponse)
     await db.flush()
 
+    # Répondre = traiter le courrier d'origine. Il sort des corbeilles
+    # "À traiter" / "En retard" et passe en "Traités".
+    origine.statut_id = STATUT_TRAITE
+
     await _ajouter_historique(
         db,
         origine.id,
