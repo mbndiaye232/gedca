@@ -142,8 +142,12 @@ export interface ApiError {
 export interface EmplacementResume {
   sous_dossier_id: number;
   code_complet: string;
-  sous_dossier_libelle: string;
-  site_libelle: string;
+  site: NiveauResume;
+  local: NiveauResume;
+  rayon: NiveauResume;
+  boite: NiveauResume;
+  dossier: NiveauResume;
+  sous_dossier: NiveauResume;
 }
 
 export interface Document {

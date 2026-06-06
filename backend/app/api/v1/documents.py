@@ -43,6 +43,7 @@ from app.schemas.document import (
     DocumentMetadonnees,
     DocumentMiseAJour,
     EmplacementResume,
+    NiveauResume,
 )
 from app.services.audit import journaliser
 from app.services.storage import stocker, stream_dechiffre
@@ -65,11 +66,18 @@ async def _emplacements_pour(
         SELECT
             dsd.document_id,
             sd.id AS sous_dossier_id,
-            format('%02s.%02s.%02s.%03s.%02s.%02s',
-                s.numero, l.numero, r.numero, b.numero, d.numero, sd.numero
-            ) AS code_complet,
-            sd.libelle AS sous_dossier_libelle,
-            s.libelle AS site_libelle
+            lpad(s.numero::text, 2, '0')
+              || '.' || lpad(l.numero::text, 2, '0')
+              || '.' || lpad(r.numero::text, 2, '0')
+              || '.' || lpad(b.numero::text, 3, '0')
+              || '.' || lpad(d.numero::text, 2, '0')
+              || '.' || lpad(sd.numero::text, 2, '0') AS code_complet,
+            s.numero AS site_num, s.libelle AS site_lib,
+            l.numero AS local_num, l.libelle AS local_lib,
+            r.numero AS rayon_num, r.libelle AS rayon_lib,
+            b.numero AS boite_num, b.libelle AS boite_lib,
+            d.numero AS dossier_num, d.libelle AS dossier_lib,
+            sd.numero AS sd_num, sd.libelle AS sd_lib
         FROM documents_sous_dossiers dsd
         JOIN sous_dossiers sd ON sd.id = dsd.sous_dossier_id
         JOIN dossiers_classeurs d ON d.id = sd.dossier_id
@@ -87,8 +95,12 @@ async def _emplacements_pour(
         r["document_id"]: EmplacementResume(
             sous_dossier_id=r["sous_dossier_id"],
             code_complet=r["code_complet"],
-            sous_dossier_libelle=r["sous_dossier_libelle"],
-            site_libelle=r["site_libelle"],
+            site=NiveauResume(numero=r["site_num"], libelle=r["site_lib"]),
+            local=NiveauResume(numero=r["local_num"], libelle=r["local_lib"]),
+            rayon=NiveauResume(numero=r["rayon_num"], libelle=r["rayon_lib"]),
+            boite=NiveauResume(numero=r["boite_num"], libelle=r["boite_lib"]),
+            dossier=NiveauResume(numero=r["dossier_num"], libelle=r["dossier_lib"]),
+            sous_dossier=NiveauResume(numero=r["sd_num"], libelle=r["sd_lib"]),
         )
         for r in rows
     }

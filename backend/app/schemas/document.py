@@ -8,13 +8,28 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class NiveauResume(BaseModel):
+    """Numéro + libellé d'un niveau d'archivage."""
+
+    numero: int
+    libelle: str
+
+
 class EmplacementResume(BaseModel):
-    """Emplacement physique résumé pour la liste des documents."""
+    """Emplacement physique d'un document.
+
+    Embarque les 6 niveaux pour permettre l'affichage d'un détail complet
+    sans round-trip supplémentaire.
+    """
 
     sous_dossier_id: int
     code_complet: str  # ex: "01.01.01.001.01.01"
-    sous_dossier_libelle: str
-    site_libelle: str
+    site: NiveauResume
+    local: NiveauResume
+    rayon: NiveauResume
+    boite: NiveauResume
+    dossier: NiveauResume
+    sous_dossier: NiveauResume
 
 
 class DocumentLecture(BaseModel):
