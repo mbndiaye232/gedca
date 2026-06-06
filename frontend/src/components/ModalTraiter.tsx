@@ -812,7 +812,7 @@ function ModalRepondre({
         </div>
         <Input label="Objet *" value={objet} onChange={(e) => setObjet(e.target.value)} required />
         <Select
-          label="Agent qui porte la réponse *"
+          label="Agent qui traitera la réponse *"
           value={agentId}
           onChange={(e) => setAgentId(e.target.value)}
           required
