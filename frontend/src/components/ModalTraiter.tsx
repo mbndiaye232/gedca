@@ -67,10 +67,11 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
   const { agent: agentCourant } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: courrier, isLoading } = useQuery({
+  const { data: courrier, isLoading, error } = useQuery({
     queryKey: ['courriers', 'detail', courrierId],
     queryFn: () => lireCourrier(courrierId),
     enabled: ouvert,
+    retry: false,
   });
 
   const [actionEnCours, setActionEnCours] = useState<
@@ -104,7 +105,25 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
       titre={courrier ? `Courrier ${courrier.numero_enregistrement}` : 'Courrier'}
       largeur="xl"
     >
-      {isLoading || !courrier ? (
+      {isLoading ? (
+        <p className="text-sm text-slate-500 py-8 text-center">Chargement…</p>
+      ) : error ? (
+        <div className="py-8 px-4">
+          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+            <p className="font-medium mb-1">Impossible d'afficher ce courrier</p>
+            <p className="text-xs">{extraireMessageErreur(error, "Accès refusé ou courrier introuvable.")}</p>
+            <p className="text-xs mt-2 text-red-600">
+              Tu ne fais peut-être plus partie des agents qui voient ce courrier
+              (par exemple après une imputation à un autre agent).
+            </p>
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button variante="secondaire" onClick={onFermer}>
+              Fermer
+            </Button>
+          </div>
+        </div>
+      ) : !courrier ? (
         <p className="text-sm text-slate-500 py-8 text-center">Chargement…</p>
       ) : (
         <div className="space-y-5">
