@@ -205,6 +205,57 @@ export interface Referentiel {
   actif: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// PRD-05 — Archivage physique
+// ---------------------------------------------------------------------------
+
+interface _EmplacementBase {
+  id: number;
+  numero: number;
+  libelle: string;
+}
+
+export interface Site extends _EmplacementBase {
+  description: string | null;
+}
+
+export interface Local extends _EmplacementBase {
+  site_id: number;
+  description: string | null;
+}
+
+export interface Rayon extends _EmplacementBase {
+  local_id: number;
+}
+
+export interface Boite extends _EmplacementBase {
+  rayon_id: number;
+}
+
+export interface Dossier extends _EmplacementBase {
+  boite_id: number;
+}
+
+export interface SousDossier extends _EmplacementBase {
+  dossier_id: number;
+}
+
+export interface NiveauResume {
+  numero: number;
+  libelle: string;
+}
+
+export interface CodeComplet {
+  sous_dossier_id: number;
+  code_complet: string; // ex: "05.02.01.001.04.07"
+  site: NiveauResume;
+  local: NiveauResume;
+  rayon: NiveauResume;
+  boite: NiveauResume;
+  dossier: NiveauResume;
+  sous_dossier: NiveauResume;
+}
+
 /** Mapping rôle code ↔ role_id côté DB (cohérent avec migration 001). */
 export const ROLE_IDS: Record<Role, number> = {
   superviseur: 1,
