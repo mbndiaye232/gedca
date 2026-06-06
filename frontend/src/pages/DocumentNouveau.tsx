@@ -5,11 +5,13 @@ import { MapPin, Plus, X } from 'lucide-react';
 import { creerDocument } from '@/api/documents';
 import {
   creerCategorie,
+  creerThematique,
+  creerTypeDocument,
   listerCategories,
   listerThematiques,
   listerTypesDocument,
 } from '@/api/referentiels';
-import type { Categorie } from '@/api/types';
+import type { Categorie, Referentiel } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -41,6 +43,8 @@ export default function DocumentNouveau() {
   const [doublonId, setDoublonId] = useState<number | null>(null);
 
   const [modalCategorie, setModalCategorie] = useState(false);
+  const [modalThematique, setModalThematique] = useState(false);
+  const [modalTypeDocument, setModalTypeDocument] = useState(false);
   const [modalEmplacement, setModalEmplacement] = useState(false);
   const [emplacement, setEmplacement] = useState<{
     sousDossierId: number;
@@ -203,26 +207,52 @@ export default function DocumentNouveau() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Select
-                label="Thématique"
-                value={thematiqueId}
-                onChange={(e) => setThematiqueId(e.target.value)}
-              >
-                <option value="">— aucune —</option>
-                {thematiques.map((t) => (
-                  <option key={t.id} value={t.id}>{t.libelle}</option>
-                ))}
-              </Select>
-              <Select
-                label="Type de document"
-                value={typeDocumentId}
-                onChange={(e) => setTypeDocumentId(e.target.value)}
-              >
-                <option value="">— aucun —</option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>{t.libelle}</option>
-                ))}
-              </Select>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Select
+                    label="Thématique"
+                    value={thematiqueId}
+                    onChange={(e) => setThematiqueId(e.target.value)}
+                  >
+                    <option value="">— aucune —</option>
+                    {thematiques.map((t) => (
+                      <option key={t.id} value={t.id}>{t.libelle}</option>
+                    ))}
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variante="secondaire"
+                  onClick={() => setModalThematique(true)}
+                  title="Nouvelle thématique"
+                  className="shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Select
+                    label="Type de document"
+                    value={typeDocumentId}
+                    onChange={(e) => setTypeDocumentId(e.target.value)}
+                  >
+                    <option value="">— aucun —</option>
+                    {types.map((t) => (
+                      <option key={t.id} value={t.id}>{t.libelle}</option>
+                    ))}
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variante="secondaire"
+                  onClick={() => setModalTypeDocument(true)}
+                  title="Nouveau type de document"
+                  className="shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <Input
@@ -350,6 +380,30 @@ export default function DocumentNouveau() {
         }}
       />
 
+      <ModalReferentielSimple
+        ouvert={modalThematique}
+        onFermer={() => setModalThematique(false)}
+        titre="Nouvelle thématique"
+        queryKey={['thematiques']}
+        mutationFn={creerThematique}
+        onCree={(r) => {
+          setThematiqueId(String(r.id));
+          setModalThematique(false);
+        }}
+      />
+
+      <ModalReferentielSimple
+        ouvert={modalTypeDocument}
+        onFermer={() => setModalTypeDocument(false)}
+        titre="Nouveau type de document"
+        queryKey={['types-document']}
+        mutationFn={creerTypeDocument}
+        onCree={(r) => {
+          setTypeDocumentId(String(r.id));
+          setModalTypeDocument(false);
+        }}
+      />
+
       <SelecteurEmplacement
         ouvert={modalEmplacement}
         onFermer={() => setModalEmplacement(false)}
@@ -408,6 +462,77 @@ function NouvelleCategorieModal({ ouvert, onFermer, onCree }: ModalCatProps) {
           label="Description (optionnel)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+        />
+        {erreur && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            {erreur}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variante="secondaire" onClick={onFermer}>
+            Annuler
+          </Button>
+          <Button type="submit" chargement={creation.isPending}>
+            Créer
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modal générique pour un référentiel simple (Thématique, Type de document) :
+// uniquement un champ « libellé ».
+// ---------------------------------------------------------------------------
+
+interface ModalSimpleProps {
+  ouvert: boolean;
+  onFermer: () => void;
+  titre: string;
+  queryKey: readonly unknown[];
+  mutationFn: (libelle: string) => Promise<Referentiel>;
+  onCree: (r: Referentiel) => void;
+}
+
+function ModalReferentielSimple({
+  ouvert,
+  onFermer,
+  titre,
+  queryKey,
+  mutationFn,
+  onCree,
+}: ModalSimpleProps) {
+  const queryClient = useQueryClient();
+  const [libelle, setLibelle] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const creation = useMutation({
+    mutationFn,
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey });
+      onCree(r);
+      setLibelle('');
+      setErreur(null);
+    },
+    onError: (err) => setErreur(extraireMessageErreur(err)),
+  });
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setErreur(null);
+    creation.mutate(libelle);
+  }
+
+  return (
+    <Modal ouvert={ouvert} onFermer={onFermer} titre={titre} largeur="sm">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Input
+          label="Libellé *"
+          value={libelle}
+          onChange={(e) => setLibelle(e.target.value)}
+          required
+          autoFocus
         />
         {erreur && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
