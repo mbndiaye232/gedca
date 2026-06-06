@@ -32,6 +32,7 @@ class Site(Base):
     __tablename__ = "sites"
     __table_args__ = (
         UniqueConstraint("tenant_id", "numero", name="uq_sites_tenant_numero"),
+        UniqueConstraint("tenant_id", "libelle", name="uq_sites_tenant_libelle"),
         CheckConstraint("numero BETWEEN 1 AND 99", name="ck_sites_numero_range"),
     )
 
@@ -53,6 +54,7 @@ class LocalSalle(Base):
     __tablename__ = "locaux_salles"
     __table_args__ = (
         UniqueConstraint("site_id", "numero", name="uq_locaux_site_numero"),
+        UniqueConstraint("site_id", "libelle", name="uq_locaux_site_libelle"),
         CheckConstraint("numero BETWEEN 1 AND 99", name="ck_locaux_numero_range"),
     )
 
@@ -71,6 +73,7 @@ class Rayon(Base):
     __tablename__ = "rayons"
     __table_args__ = (
         UniqueConstraint("local_id", "numero", name="uq_rayons_local_numero"),
+        UniqueConstraint("local_id", "libelle", name="uq_rayons_local_libelle"),
         CheckConstraint("numero BETWEEN 1 AND 99", name="ck_rayons_numero_range"),
     )
 
@@ -88,6 +91,7 @@ class Boite(Base):
     __tablename__ = "boites"
     __table_args__ = (
         UniqueConstraint("rayon_id", "numero", name="uq_boites_rayon_numero"),
+        UniqueConstraint("rayon_id", "libelle", name="uq_boites_rayon_libelle"),
         CheckConstraint("numero BETWEEN 1 AND 999", name="ck_boites_numero_range"),
     )
 
@@ -105,6 +109,7 @@ class DossierClasseur(Base):
     __tablename__ = "dossiers_classeurs"
     __table_args__ = (
         UniqueConstraint("boite_id", "numero", name="uq_dossiers_boite_numero"),
+        UniqueConstraint("boite_id", "libelle", name="uq_dossiers_boite_libelle"),
         CheckConstraint("numero BETWEEN 1 AND 99", name="ck_dossiers_numero_range"),
     )
 
@@ -122,6 +127,9 @@ class SousDossier(Base):
     __tablename__ = "sous_dossiers"
     __table_args__ = (
         UniqueConstraint("dossier_id", "numero", name="uq_sous_dossiers_dossier_numero"),
+        UniqueConstraint(
+            "dossier_id", "libelle", name="uq_sous_dossiers_dossier_libelle"
+        ),
         CheckConstraint("numero BETWEEN 1 AND 99", name="ck_sous_dossiers_numero_range"),
     )
 

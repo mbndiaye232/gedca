@@ -139,6 +139,17 @@ export interface ApiError {
 // PRD-02 — Documents et référentiels
 // ---------------------------------------------------------------------------
 
+export interface EmplacementResume {
+  sous_dossier_id: number;
+  code_complet: string;
+  site: NiveauResume;
+  local: NiveauResume;
+  rayon: NiveauResume;
+  boite: NiveauResume;
+  dossier: NiveauResume;
+  sous_dossier: NiveauResume;
+}
+
 export interface Document {
   id: number;
   titre: string;
@@ -157,6 +168,7 @@ export interface Document {
   origine: string;
   statut: string;
   metadata: Record<string, unknown>;
+  emplacement: EmplacementResume | null;
   created_at: string;
   created_by: number | null;
   updated_at: string;

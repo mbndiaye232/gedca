@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import (
@@ -21,12 +21,14 @@ from app.api.deps import (
     IpClient,
     SessionDB,
 )
-from app.models import Categorie, Thematique, TypeDocument
+from app.models import Categorie, Document, Thematique, TypeDocument
 from app.schemas.referentiel import (
     CategorieCreation,
     CategorieLecture,
+    CategorieMiseAJour,
     ReferentielCreation,
     ReferentielLecture,
+    ReferentielMiseAJour,
 )
 from app.services.audit import journaliser
 
@@ -210,6 +212,305 @@ async def creer_type(
         entite="types_document",
         entite_id=t.id,
         payload={"libelle": body.libelle},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+# ===========================================================================
+# Mise à jour et désactivation — superviseur uniquement
+# ===========================================================================
+
+
+async def _charger_categorie(db, cat_id: int, tenant_id: int) -> Categorie:
+    result = await db.execute(
+        select(Categorie).where(Categorie.id == cat_id, Categorie.tenant_id == tenant_id)
+    )
+    c = result.scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catégorie introuvable")
+    return c
+
+
+async def _charger_thematique(db, th_id: int, tenant_id: int) -> Thematique:
+    result = await db.execute(
+        select(Thematique).where(Thematique.id == th_id, Thematique.tenant_id == tenant_id)
+    )
+    t = result.scalar_one_or_none()
+    if t is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thématique introuvable")
+    return t
+
+
+async def _charger_type(db, t_id: int, tenant_id: int) -> TypeDocument:
+    result = await db.execute(
+        select(TypeDocument).where(TypeDocument.id == t_id, TypeDocument.tenant_id == tenant_id)
+    )
+    t = result.scalar_one_or_none()
+    if t is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Type introuvable")
+    return t
+
+
+async def _flush_409_libelle(db, label: str) -> None:
+    """Flush + 409 lisible sur violation UNIQUE (libellé déjà utilisé)."""
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Libellé de {label} déjà utilisé dans ce tenant",
+        ) from exc
+
+
+# ----- Catégories ---------------------------------------------------------
+
+
+@router.put(
+    "/categories/{cat_id}",
+    response_model=CategorieLecture,
+    summary="Modifier une catégorie (superviseur)",
+)
+async def maj_categorie(
+    cat_id: int,
+    body: CategorieMiseAJour,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Categorie:
+    cat = await _charger_categorie(db, cat_id, superviseur.tenant_id)
+    diff: dict[str, object] = {}
+    if body.libelle is not None and body.libelle != cat.libelle:
+        diff["libelle"] = body.libelle
+        cat.libelle = body.libelle
+    if body.description is not None and body.description != cat.description:
+        diff["description"] = body.description
+        cat.description = body.description
+    if not diff:
+        return cat
+
+    await _flush_409_libelle(db, "catégorie")
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="categorie.update",
+        entite="categories",
+        entite_id=cat.id,
+        payload={"diff": diff},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+
+@router.delete(
+    "/categories/{cat_id}",
+    response_model=CategorieLecture,
+    summary="Désactiver une catégorie (superviseur) — bloqué si documents liés",
+)
+async def desactiver_categorie(
+    cat_id: int,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Categorie:
+    cat = await _charger_categorie(db, cat_id, superviseur.tenant_id)
+    nb = await db.scalar(
+        select(func.count(Document.id)).where(
+            Document.categorie_id == cat.id, Document.supprime.is_(False)
+        )
+    )
+    if nb and int(nb) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Impossible de désactiver : {int(nb)} document(s) "
+                "utilisent cette catégorie. Réaffecte-les d'abord."
+            ),
+        )
+    if not cat.actif:
+        return cat
+    cat.actif = False
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="categorie.desactiver",
+        entite="categories",
+        entite_id=cat.id,
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+
+# ----- Thématiques --------------------------------------------------------
+
+
+@router.put(
+    "/thematiques/{th_id}",
+    response_model=ReferentielLecture,
+    summary="Renommer une thématique (superviseur)",
+)
+async def maj_thematique(
+    th_id: int,
+    body: ReferentielMiseAJour,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Thematique:
+    th = await _charger_thematique(db, th_id, superviseur.tenant_id)
+    if body.libelle == th.libelle:
+        return th
+    ancien = th.libelle
+    th.libelle = body.libelle
+    await _flush_409_libelle(db, "thématique")
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="thematique.update",
+        entite="thematiques",
+        entite_id=th.id,
+        payload={"diff": {"libelle": [ancien, body.libelle]}},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(th)
+    return th
+
+
+@router.delete(
+    "/thematiques/{th_id}",
+    response_model=ReferentielLecture,
+    summary="Désactiver une thématique (superviseur)",
+)
+async def desactiver_thematique(
+    th_id: int,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Thematique:
+    th = await _charger_thematique(db, th_id, superviseur.tenant_id)
+    nb = await db.scalar(
+        select(func.count(Document.id)).where(
+            Document.thematique_id == th.id, Document.supprime.is_(False)
+        )
+    )
+    if nb and int(nb) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Impossible de désactiver : {int(nb)} document(s) "
+                "référencent cette thématique."
+            ),
+        )
+    if not th.actif:
+        return th
+    th.actif = False
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="thematique.desactiver",
+        entite="thematiques",
+        entite_id=th.id,
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(th)
+    return th
+
+
+# ----- Types de document --------------------------------------------------
+
+
+@router.put(
+    "/types-document/{t_id}",
+    response_model=ReferentielLecture,
+    summary="Renommer un type de document (superviseur)",
+)
+async def maj_type(
+    t_id: int,
+    body: ReferentielMiseAJour,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> TypeDocument:
+    t = await _charger_type(db, t_id, superviseur.tenant_id)
+    if body.libelle == t.libelle:
+        return t
+    ancien = t.libelle
+    t.libelle = body.libelle
+    await _flush_409_libelle(db, "type de document")
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="type_document.update",
+        entite="types_document",
+        entite_id=t.id,
+        payload={"diff": {"libelle": [ancien, body.libelle]}},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+@router.delete(
+    "/types-document/{t_id}",
+    response_model=ReferentielLecture,
+    summary="Désactiver un type de document (superviseur)",
+)
+async def desactiver_type(
+    t_id: int,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> TypeDocument:
+    t = await _charger_type(db, t_id, superviseur.tenant_id)
+    nb = await db.scalar(
+        select(func.count(Document.id)).where(
+            Document.type_document_id == t.id, Document.supprime.is_(False)
+        )
+    )
+    if nb and int(nb) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Impossible de désactiver : {int(nb)} document(s) "
+                "référencent ce type."
+            ),
+        )
+    if not t.actif:
+        return t
+    t.actif = False
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="type_document.desactiver",
+        entite="types_document",
+        entite_id=t.id,
         ip=ip,
         user_agent=request.headers.get("user-agent"),
     )

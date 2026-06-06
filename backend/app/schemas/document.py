@@ -8,6 +8,30 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class NiveauResume(BaseModel):
+    """Numéro + libellé d'un niveau d'archivage."""
+
+    numero: int
+    libelle: str
+
+
+class EmplacementResume(BaseModel):
+    """Emplacement physique d'un document.
+
+    Embarque les 6 niveaux pour permettre l'affichage d'un détail complet
+    sans round-trip supplémentaire.
+    """
+
+    sous_dossier_id: int
+    code_complet: str  # ex: "01.01.01.001.01.01"
+    site: NiveauResume
+    local: NiveauResume
+    rayon: NiveauResume
+    boite: NiveauResume
+    dossier: NiveauResume
+    sous_dossier: NiveauResume
+
+
 class DocumentLecture(BaseModel):
     """Sortie standard d'un document (métadonnées, sans le contenu binaire)."""
 
@@ -31,6 +55,8 @@ class DocumentLecture(BaseModel):
     statut: str
     # Champ Python `meta_donnees` ↔ clé JSON `metadata` (compat client / vocabulaire métier).
     meta_donnees: dict[str, Any] = Field(serialization_alias="metadata")
+    # Emplacement physique optionnel (null si le document n'est pas archivé physiquement)
+    emplacement: EmplacementResume | None = None
     created_at: datetime
     created_by: int | None
     updated_at: datetime

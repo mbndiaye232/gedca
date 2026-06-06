@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, FileText, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, FileText, MapPin, Plus, Search, Trash2 } from 'lucide-react';
 import { listerDocuments, supprimerDocument } from '@/api/documents';
 import { listerCategories } from '@/api/referentiels';
 import type { Document } from '@/api/types';
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Visionneuse } from '@/components/Visionneuse';
+import { DetailEmplacement } from '@/components/DetailEmplacement';
 import { extraireMessageErreur } from '@/api/client';
 import { useAuth } from '@/auth/useAuth';
 import { formatDate, formatDateTime } from '@/lib/utils';
@@ -37,6 +38,7 @@ export default function Documents() {
   const [rechercheActive, setRechercheActive] = useState('');
   const [categorieFiltre, setCategorieFiltre] = useState<string>('');
   const [visionneuseDoc, setVisionneuseDoc] = useState<Document | null>(null);
+  const [emplacementDoc, setEmplacementDoc] = useState<Document | null>(null);
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents', { q: rechercheActive, categorie_id: categorieFiltre || undefined }],
@@ -159,6 +161,9 @@ export default function Documents() {
                     Date doc
                   </th>
                   <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Emplacement
+                  </th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     Statut
                   </th>
                   <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -199,6 +204,28 @@ export default function Documents() {
                       {formatTaille(d.taille_octets)}
                     </td>
                     <td className="px-5 py-3.5 text-slate-600">{formatDate(d.date_document)}</td>
+                    <td className="px-5 py-3.5">
+                      {d.emplacement ? (
+                        <button
+                          type="button"
+                          onClick={() => setEmplacementDoc(d)}
+                          className="flex items-start gap-1.5 max-w-xs text-left rounded-lg px-1.5 py-1 -mx-1.5 -my-1 hover:bg-brand-50 transition-colors group"
+                          title={`Détail : ${d.emplacement.site.libelle} → ${d.emplacement.sous_dossier.libelle}`}
+                        >
+                          <MapPin className="h-3.5 w-3.5 text-brand-600 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+                          <div className="min-w-0">
+                            <p className="font-mono text-xs text-slate-700 group-hover:text-brand-700">
+                              {d.emplacement.code_complet}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {d.emplacement.sous_dossier.libelle}
+                            </p>
+                          </div>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       <StatutBadge statut={d.statut} />
                     </td>
@@ -243,6 +270,12 @@ export default function Documents() {
         ouvert={visionneuseDoc !== null}
         document={visionneuseDoc}
         onFermer={() => setVisionneuseDoc(null)}
+      />
+
+      <DetailEmplacement
+        ouvert={emplacementDoc !== null}
+        emplacement={emplacementDoc?.emplacement ?? null}
+        onFermer={() => setEmplacementDoc(null)}
       />
     </div>
   );
