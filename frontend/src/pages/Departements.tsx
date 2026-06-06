@@ -122,34 +122,29 @@ export default function Departements() {
         )}
       </Card>
 
-      <ModalDepartement
-        ouvert={modalOuvert}
-        onFermer={() => setModalOuvert(false)}
-        departement={enEdition}
-      />
+      {modalOuvert && (
+        <ModalDepartement
+          key={enEdition?.id ?? 'nouveau'}
+          onFermer={() => setModalOuvert(false)}
+          departement={enEdition}
+        />
+      )}
     </div>
   );
 }
 
 interface ModalDepProps {
-  ouvert: boolean;
   onFermer: () => void;
   departement: Departement | null;
 }
 
-function ModalDepartement({ ouvert, onFermer, departement }: ModalDepProps) {
+function ModalDepartement({ onFermer, departement }: ModalDepProps) {
   const queryClient = useQueryClient();
   const enEdition = departement !== null;
 
   const [code, setCode] = useState(departement?.code ?? '');
   const [libelle, setLibelle] = useState(departement?.libelle ?? '');
   const [erreur, setErreur] = useState<string | null>(null);
-
-  if (ouvert && enEdition && departement && libelle !== departement.libelle && code !== departement.code) {
-    setCode(departement.code ?? '');
-    setLibelle(departement.libelle);
-    setErreur(null);
-  }
 
   const creation = useMutation({
     mutationFn: creerDepartement,
@@ -183,7 +178,7 @@ function ModalDepartement({ ouvert, onFermer, departement }: ModalDepProps) {
 
   return (
     <Modal
-      ouvert={ouvert}
+      ouvert
       onFermer={onFermer}
       titre={enEdition ? `Modifier ${departement?.libelle}` : 'Nouveau département'}
       largeur="sm"

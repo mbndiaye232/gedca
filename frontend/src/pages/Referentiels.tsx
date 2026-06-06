@@ -110,44 +110,32 @@ function SectionCategories() {
         )}
       </CardBody>
 
-      <ModalCategorie
-        ouvert={modalCreation || enEdition !== null}
-        onFermer={() => {
-          setModalCreation(false);
-          setEnEdition(null);
-        }}
-        existant={enEdition}
-      />
+      {(modalCreation || enEdition !== null) && (
+        <ModalCategorie
+          key={enEdition?.id ?? 'nouveau'}
+          onFermer={() => {
+            setModalCreation(false);
+            setEnEdition(null);
+          }}
+          existant={enEdition}
+        />
+      )}
     </Card>
   );
 }
 
 interface ModalCategorieProps {
-  ouvert: boolean;
   onFermer: () => void;
   existant: Categorie | null;
 }
 
-function ModalCategorie({ ouvert, onFermer, existant }: ModalCategorieProps) {
+function ModalCategorie({ onFermer, existant }: ModalCategorieProps) {
   const queryClient = useQueryClient();
   const enEdition = existant !== null;
 
   const [libelle, setLibelle] = useState(existant?.libelle ?? '');
   const [description, setDescription] = useState(existant?.description ?? '');
   const [erreur, setErreur] = useState<string | null>(null);
-
-  if (
-    ouvert &&
-    enEdition &&
-    existant &&
-    libelle !== existant.libelle &&
-    description !== (existant.description ?? '')
-  ) {
-    // resync à l'ouverture d'une nouvelle édition
-    setLibelle(existant.libelle);
-    setDescription(existant.description ?? '');
-    setErreur(null);
-  }
 
   function reset() {
     setLibelle('');
@@ -190,7 +178,7 @@ function ModalCategorie({ ouvert, onFermer, existant }: ModalCategorieProps) {
 
   return (
     <Modal
-      ouvert={ouvert}
+      ouvert
       onFermer={reset}
       titre={enEdition ? `Modifier « ${existant?.libelle} »` : 'Nouvelle catégorie'}
       largeur="sm"
@@ -340,25 +328,26 @@ function SectionReferentielSimple({
         )}
       </CardBody>
 
-      <ModalReferentielEdition
-        ouvert={modalCreation || enEdition !== null}
-        onFermer={() => {
-          setModalCreation(false);
-          setEnEdition(null);
-        }}
-        existant={enEdition}
-        titreCreation={libelleModalCreation}
-        libelleType={libelleType}
-        queryKey={queryKey}
-        creer={creer}
-        majFn={majFn}
-      />
+      {(modalCreation || enEdition !== null) && (
+        <ModalReferentielEdition
+          key={enEdition?.id ?? 'nouveau'}
+          onFermer={() => {
+            setModalCreation(false);
+            setEnEdition(null);
+          }}
+          existant={enEdition}
+          titreCreation={libelleModalCreation}
+          libelleType={libelleType}
+          queryKey={queryKey}
+          creer={creer}
+          majFn={majFn}
+        />
+      )}
     </Card>
   );
 }
 
 interface ModalSimpleProps {
-  ouvert: boolean;
   onFermer: () => void;
   existant: Referentiel | null;
   titreCreation: string;
@@ -369,7 +358,6 @@ interface ModalSimpleProps {
 }
 
 function ModalReferentielEdition({
-  ouvert,
   onFermer,
   existant,
   titreCreation,
@@ -383,10 +371,6 @@ function ModalReferentielEdition({
 
   const [libelle, setLibelle] = useState(existant?.libelle ?? '');
   const [erreur, setErreur] = useState<string | null>(null);
-
-  if (ouvert && enEdition && existant && libelle !== existant.libelle && erreur === null) {
-    setLibelle(existant.libelle);
-  }
 
   function reset() {
     setLibelle('');
@@ -424,7 +408,7 @@ function ModalReferentielEdition({
 
   return (
     <Modal
-      ouvert={ouvert}
+      ouvert
       onFermer={reset}
       titre={enEdition ? `Modifier « ${existant?.libelle} »` : titreCreation}
       largeur="sm"

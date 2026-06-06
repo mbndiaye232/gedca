@@ -168,12 +168,14 @@ export default function Agents() {
         )}
       </Card>
 
-      <ModalAgent
-        ouvert={modalOuvert}
-        onFermer={() => setModalOuvert(false)}
-        agent={agentEnCours}
-        departements={departements}
-      />
+      {modalOuvert && (
+        <ModalAgent
+          key={agentEnCours?.id ?? 'nouveau'}
+          onFermer={() => setModalOuvert(false)}
+          agent={agentEnCours}
+          departements={departements}
+        />
+      )}
     </div>
   );
 }
@@ -183,16 +185,18 @@ export default function Agents() {
 // ---------------------------------------------------------------------------
 
 interface ModalAgentProps {
-  ouvert: boolean;
   onFermer: () => void;
   agent: Agent | null;
   departements: { id: number; libelle: string }[];
 }
 
-function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) {
+function ModalAgent({ onFermer, agent, departements }: ModalAgentProps) {
   const queryClient = useQueryClient();
   const enEdition = agent !== null;
 
+  // Le composant est remonté à chaque ouverture (cf. {modalOuvert && <ModalAgent
+  // key=... />}), donc useState s'initialise toujours proprement à partir de
+  // `agent` ou valeurs vides — pas besoin de useEffect ou de hack de resync.
   const [login, setLogin] = useState(agent?.login ?? '');
   const [motDePasse, setMotDePasse] = useState('');
   const [nom, setNom] = useState(agent?.nom ?? '');
@@ -205,18 +209,6 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
   );
   const [role, setRole] = useState<Role>(agent ? roleFromId(agent.role_id) : 'agent_standard');
   const [erreur, setErreur] = useState<string | null>(null);
-
-  if (ouvert && enEdition && agent && login !== agent.login) {
-    setLogin(agent.login);
-    setNom(agent.nom);
-    setPrenom(agent.prenom);
-    setEmail(agent.email ?? '');
-    setTelephone(agent.telephone ?? '');
-    setFonction(agent.fonction ?? '');
-    setDepartementId(agent.departement_id ? String(agent.departement_id) : '');
-    setRole(roleFromId(agent.role_id));
-    setErreur(null);
-  }
 
   const creation = useMutation({
     mutationFn: creerAgent,
@@ -267,7 +259,7 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
 
   return (
     <Modal
-      ouvert={ouvert}
+      ouvert
       onFermer={onFermer}
       titre={enEdition ? `Modifier ${agent?.prenom} ${agent?.nom}` : 'Nouvel agent'}
       largeur="md"
