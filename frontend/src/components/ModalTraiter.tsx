@@ -769,12 +769,10 @@ function ModalRepondre({
   onFermer: () => void;
   onSucces: () => void;
 }) {
-  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: listerAgents });
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: listerCategories });
 
   const [fichier, setFichier] = useState<File | null>(null);
   const [objet, setObjet] = useState(`Rép : ${courrier.objet}`);
-  const [agentId, setAgentId] = useState<string>('');
   const [categorieId, setCategorieId] = useState<string>(
     courrier.categorie_id ? String(courrier.categorie_id) : '',
   );
@@ -784,7 +782,9 @@ function ModalRepondre({
     mutationFn: () => {
       const body: RepondreBody = {
         objet,
-        agent_destinataire_id: Number(agentId),
+        // agent_destinataire_id non fourni → le backend remonte la
+        // réponse à l'agent qui m'a imputé le courrier (ou me la laisse
+        // si je suis le propriétaire d'origine).
         document_titre: fichier?.name.replace(/\.[^.]+$/, '') || 'Réponse',
         document_categorie_id: Number(categorieId),
       };
@@ -800,7 +800,7 @@ function ModalRepondre({
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
           setErreur(null);
-          if (!fichier || !agentId || !categorieId) return;
+          if (!fichier || !categorieId) return;
           mutation.mutate();
         }}
         className="space-y-4"
@@ -808,22 +808,10 @@ function ModalRepondre({
         <div className="rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-xs text-sky-900">
           <strong>Réponse</strong> = nouveau courrier sortant lié à l'origine. Le document original
           reste attaché au courrier d'origine — tu joins ci-dessous{' '}
-          <strong>le document de ta réponse</strong>.
+          <strong>le document de ta réponse</strong>. La réponse remonte
+          automatiquement à l'agent qui t'a imputé le courrier.
         </div>
         <Input label="Objet *" value={objet} onChange={(e) => setObjet(e.target.value)} required />
-        <Select
-          label="Agent qui traitera la réponse *"
-          value={agentId}
-          onChange={(e) => setAgentId(e.target.value)}
-          required
-        >
-          <option value="">— choisir —</option>
-          {agents.filter((a) => a.actif).map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.prenom} {a.nom}
-            </option>
-          ))}
-        </Select>
         <Select
           label="Catégorie *"
           value={categorieId}
@@ -859,7 +847,7 @@ function ModalRepondre({
           </Button>
           <Button
             type="submit"
-            disabled={!fichier || !agentId || !categorieId}
+            disabled={!fichier || !categorieId}
             chargement={mutation.isPending}
           >
             Envoyer la réponse

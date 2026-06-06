@@ -96,7 +96,10 @@ class RepondreBody(BaseModel):
     observations: str | None = None
     date_limite: date | None = None
     correspondant_id: int | None = None  # défaut : reprendre celui de l'origine
-    agent_destinataire_id: int  # qui porte la réponse
+    # Optionnel : si non fourni, le backend calcule automatiquement.
+    # Règle métier : la réponse remonte à l'agent qui m'a imputé le courrier
+    # (ou reste à moi si je suis le propriétaire d'origine).
+    agent_destinataire_id: int | None = None
     departement_destinataire_id: int | None = None
     document_titre: str = Field(..., min_length=1, max_length=512)
     document_categorie_id: int

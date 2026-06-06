@@ -438,7 +438,10 @@ export interface RepondreBody {
   observations?: string | null;
   date_limite?: string | null;
   correspondant_id?: number | null;
-  agent_destinataire_id: number;
+  // Optionnel : si non fourni, le backend remonte la réponse à l'agent
+  // qui m'a imputé le courrier (ou me la laisse si je suis le proprio
+  // d'origine).
+  agent_destinataire_id?: number | null;
   departement_destinataire_id?: number | null;
   document_titre: string;
   document_categorie_id: number;

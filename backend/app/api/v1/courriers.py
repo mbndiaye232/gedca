@@ -976,6 +976,27 @@ async def repondre(
     numero = await prochain_numero_enregistrement(db, agent.tenant_id)
     correspondant_id = body.correspondant_id or origine.correspondant_id
 
+    # Calcul automatique du destinataire de la réponse :
+    # - si je suis l'agent à qui ce courrier a été imputé en dernier,
+    #   la réponse remonte à l'imputeur (mon supérieur fonctionnel)
+    # - sinon (je suis le propriétaire d'origine), elle reste à moi
+    # - le body peut forcer un destinataire explicite (superviseur, cas
+    #   particulier).
+    if body.agent_destinataire_id is not None:
+        destinataire_id = body.agent_destinataire_id
+    else:
+        res_imp = await db.execute(
+            select(Imputation.agent_imputeur_id)
+            .where(
+                Imputation.courrier_id == origine.id,
+                Imputation.agent_impute_id == agent.id,
+            )
+            .order_by(Imputation.ts.desc())
+            .limit(1)
+        )
+        imputeur_id = res_imp.scalar_one_or_none()
+        destinataire_id = imputeur_id if imputeur_id is not None else agent.id
+
     reponse = Courrier(
         tenant_id=agent.tenant_id,
         numero_enregistrement=numero,
@@ -988,10 +1009,10 @@ async def repondre(
         date_limite=body.date_limite,
         correspondant_id=correspondant_id,
         departement_destinataire_id=body.departement_destinataire_id,
-        agent_destinataire_id=body.agent_destinataire_id,
+        agent_destinataire_id=destinataire_id,
         document_principal_id=document.id,
         statut_id=STATUT_A_TRAITER,
-        agent_proprietaire_id=body.agent_destinataire_id,
+        agent_proprietaire_id=destinataire_id,
         courrier_origine_id=origine.id,
         created_by=agent.id,
     )
@@ -1019,10 +1040,10 @@ async def repondre(
     await db.commit()
     await db.refresh(reponse)
 
-    if body.agent_destinataire_id != agent.id:
+    if destinataire_id != agent.id:
         await notifier_nouveau_courrier(
             courrier_id=reponse.id,
-            agent_destinataire_id=body.agent_destinataire_id,
+            agent_destinataire_id=destinataire_id,
             tenant_id=agent.tenant_id,
         )
 
