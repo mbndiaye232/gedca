@@ -219,9 +219,11 @@ function Panneau<T extends { id: number; numero: number; libelle: string }>({
           erreur={erreur}
           onValider={async (libelle) => {
             try {
-              await onCreer(libelle);
+              const nouveau = await onCreer(libelle);
               queryClient.invalidateQueries({ queryKey });
               setCreationOuverte(false);
+              // Auto-sélection : active immédiatement le panneau enfant
+              onSelect(nouveau);
             } catch (e) { setErreur(extraireMessageErreur(e)); }
           }}
           onFermer={() => setCreationOuverte(false)}
