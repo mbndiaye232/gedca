@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     agents,
+    archivage,
     audit_log,
     auth,
     departements,
@@ -20,3 +21,4 @@ api_router.include_router(structure.router)
 api_router.include_router(audit_log.router)
 api_router.include_router(documents.router)
 api_router.include_router(referentiels.router)
+api_router.include_router(archivage.router)
