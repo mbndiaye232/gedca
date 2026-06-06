@@ -1,9 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2 } from 'lucide-react';
 import { lireStructure, majStructure } from '@/api/structure';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { extraireMessageErreur } from '@/api/client';
 
 export default function Structure() {
@@ -49,17 +51,32 @@ export default function Structure() {
   }
 
   if (isLoading || !structure) {
-    return <div className="p-6 text-gray-500">Chargement…</div>;
+    return <div className="p-6 text-slate-500 text-sm">Chargement…</div>;
   }
 
   return (
-    <div className="p-6 max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Structure</h1>
-        <p className="text-gray-600 text-sm mt-1">
-          Informations de l'organisation. Code interne : <span className="font-mono">{structure.code}</span>
-        </p>
-      </div>
+    <div className="p-6 max-w-3xl space-y-6">
+      <PageHeader
+        titre="Structure"
+        sousTitre={`Informations de l'organisation. Code interne : ${structure.code}`}
+      />
+
+      {/* Carte d'identité visuelle */}
+      <Card>
+        <CardBody className="p-6 flex items-center gap-4">
+          <div className="h-16 w-16 rounded-2xl bg-gradient-brand shadow-soft flex items-center justify-center text-white">
+            <Building2 className="h-8 w-8" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+              {structure.raison_sociale}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {structure.email ?? 'Aucun email configuré'}
+            </p>
+          </div>
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -105,7 +122,7 @@ export default function Structure() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-2 border-t border-slate-100">
               <Button type="submit" chargement={mutation.isPending}>
                 Enregistrer
               </Button>

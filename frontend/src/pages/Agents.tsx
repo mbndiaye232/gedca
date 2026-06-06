@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Pencil, Plus } from 'lucide-react';
+import { Ban, Pencil, Plus, Users } from 'lucide-react';
 import {
   creerAgent,
   desactiverAgent,
@@ -16,6 +16,8 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { extraireMessageErreur } from '@/api/client';
 
 export default function Agents() {
@@ -32,6 +34,11 @@ export default function Agents() {
   const [modalOuvert, setModalOuvert] = useState(false);
   const [agentEnCours, setAgentEnCours] = useState<Agent | null>(null);
 
+  const desactivation = useMutation({
+    mutationFn: desactiverAgent,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
+  });
+
   function ouvrirCreation() {
     setAgentEnCours(null);
     setModalOuvert(true);
@@ -41,98 +48,124 @@ export default function Agents() {
     setModalOuvert(true);
   }
 
-  const desactivation = useMutation({
-    mutationFn: desactiverAgent,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
-  });
-
-  if (isLoading) {
-    return <div className="p-6 text-gray-500">Chargement…</div>;
-  }
-
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
-          <p className="text-gray-600 text-sm mt-1">
-            Gérer les comptes utilisateurs du tenant.
-          </p>
-        </div>
-        <Button onClick={ouvrirCreation}>
-          <Plus className="h-4 w-4" /> Nouvel agent
-        </Button>
-      </div>
+      <PageHeader
+        titre="Agents"
+        sousTitre="Gérer les comptes utilisateurs et leurs rôles."
+        actions={
+          <Button onClick={ouvrirCreation}>
+            <Plus className="h-4 w-4" /> Nouvel agent
+          </Button>
+        }
+      />
 
-      <Card>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
-            <tr>
-              <th className="px-4 py-3">Login</th>
-              <th className="px-4 py-3">Nom</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Département</th>
-              <th className="px-4 py-3">Rôle</th>
-              <th className="px-4 py-3">Statut</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {agents.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                  Aucun agent. Crée le premier avec « Nouvel agent ».
-                </td>
-              </tr>
-            )}
-            {agents.map((a) => {
-              const dep = departements.find((d) => d.id === a.departement_id);
-              const role = roleFromId(a.role_id);
-              return (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-gray-700">{a.login}</td>
-                  <td className="px-4 py-3 text-gray-900">{a.prenom} {a.nom}</td>
-                  <td className="px-4 py-3 text-gray-600">{a.email ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{dep?.libelle ?? '—'}</td>
-                  <td className="px-4 py-3"><Badge variante="info">{ROLE_LABELS[role]}</Badge></td>
-                  <td className="px-4 py-3">
-                    {a.actif ? (
-                      <Badge variante="succes">Actif</Badge>
-                    ) : (
-                      <Badge variante="erreur">Désactivé</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="inline-flex gap-2">
-                      <Button
-                        variante="fantome"
-                        taille="sm"
-                        onClick={() => ouvrirEdition(a)}
-                        title="Modifier"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {a.actif && (
-                        <Button
-                          variante="fantome"
-                          taille="sm"
-                          onClick={() => {
-                            if (confirm(`Désactiver ${a.prenom} ${a.nom} ?`)) {
-                              desactivation.mutate(a.id);
-                            }
-                          }}
-                          title="Désactiver"
-                        >
-                          <Ban className="h-4 w-4 text-red-600" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
+      <Card className="overflow-hidden">
+        {isLoading && <div className="p-8 text-center text-slate-500 text-sm">Chargement…</div>}
+        {!isLoading && agents.length === 0 && (
+          <EmptyState
+            icone={Users}
+            titre="Aucun agent"
+            message="Crée le premier compte utilisateur avec « Nouvel agent »."
+            action={
+              <Button onClick={ouvrirCreation}>
+                <Plus className="h-4 w-4" /> Nouvel agent
+              </Button>
+            }
+          />
+        )}
+        {!isLoading && agents.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Agent
+                  </th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Email
+                  </th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Département
+                  </th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Rôle
+                  </th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Statut
+                  </th>
+                  <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Actions
+                  </th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {agents.map((a) => {
+                  const dep = departements.find((d) => d.id === a.departement_id);
+                  const role = roleFromId(a.role_id);
+                  return (
+                    <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-brand text-white text-[10px] font-bold flex items-center justify-center">
+                            {a.prenom[0]?.toUpperCase()}
+                            {a.nom[0]?.toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-slate-900 font-medium">
+                              {a.prenom} {a.nom}
+                            </p>
+                            <p className="text-xs text-slate-500 font-mono">{a.login}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600">{a.email ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-slate-600">{dep?.libelle ?? '—'}</td>
+                      <td className="px-5 py-3.5">
+                        <Badge variante={role === 'superviseur' ? 'violet' : 'info'}>
+                          {ROLE_LABELS[role]}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {a.actif ? (
+                          <Badge variante="succes" pastille>Actif</Badge>
+                        ) : (
+                          <Badge variante="erreur" pastille>Désactivé</Badge>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="inline-flex gap-1">
+                          <Button
+                            variante="fantome"
+                            taille="sm"
+                            onClick={() => ouvrirEdition(a)}
+                            title="Modifier"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {a.actif && (
+                            <Button
+                              variante="fantome"
+                              taille="sm"
+                              onClick={() => {
+                                if (confirm(`Désactiver ${a.prenom} ${a.nom} ?`)) {
+                                  desactivation.mutate(a.id);
+                                }
+                              }}
+                              title="Désactiver"
+                            >
+                              <Ban className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       <ModalAgent
@@ -166,8 +199,6 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
   const [prenom, setPrenom] = useState(agent?.prenom ?? '');
   const [email, setEmail] = useState(agent?.email ?? '');
   const [telephone, setTelephone] = useState(agent?.telephone ?? '');
-  const [cellulaire, setCellulaire] = useState(agent?.cellulaire ?? '');
-  const [adresse, setAdresse] = useState(agent?.adresse ?? '');
   const [fonction, setFonction] = useState(agent?.fonction ?? '');
   const [departementId, setDepartementId] = useState<string>(
     agent?.departement_id ? String(agent.departement_id) : '',
@@ -175,15 +206,12 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
   const [role, setRole] = useState<Role>(agent ? roleFromId(agent.role_id) : 'agent_standard');
   const [erreur, setErreur] = useState<string | null>(null);
 
-  // Reset quand on ouvre/change d'agent
   if (ouvert && enEdition && agent && login !== agent.login) {
     setLogin(agent.login);
     setNom(agent.nom);
     setPrenom(agent.prenom);
     setEmail(agent.email ?? '');
     setTelephone(agent.telephone ?? '');
-    setCellulaire(agent.cellulaire ?? '');
-    setAdresse(agent.adresse ?? '');
     setFonction(agent.fonction ?? '');
     setDepartementId(agent.departement_id ? String(agent.departement_id) : '');
     setRole(roleFromId(agent.role_id));
@@ -217,12 +245,9 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
       edition.mutate({
         id: agent.id,
         body: {
-          nom,
-          prenom,
+          nom, prenom,
           email: email || null,
           telephone: telephone || null,
-          cellulaire: cellulaire || null,
-          adresse: adresse || null,
           fonction: fonction || null,
           departement_id: departementId ? Number(departementId) : null,
           role_id: ROLE_IDS[role],
@@ -230,14 +255,9 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
       });
     } else {
       creation.mutate({
-        login,
-        mot_de_passe: motDePasse,
-        nom,
-        prenom,
+        login, mot_de_passe: motDePasse, nom, prenom,
         email: email || null,
         telephone: telephone || null,
-        cellulaire: cellulaire || null,
-        adresse: adresse || null,
         fonction: fonction || null,
         departement_id: departementId ? Number(departementId) : null,
         role_id: ROLE_IDS[role],
@@ -271,49 +291,11 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
               required
             />
           )}
-          <Input
-            label="Prénom *"
-            value={prenom}
-            onChange={(e) => setPrenom(e.target.value)}
-            required
-          />
-          <Input
-            label="Nom *"
-            value={nom}
-            onChange={(e) => setNom(e.target.value)}
-            required
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Input
-            label="Téléphone fixe"
-            type="tel"
-            value={telephone}
-            onChange={(e) => setTelephone(e.target.value)}
-          />
-          <Input
-            label="Cellulaire"
-            type="tel"
-            value={cellulaire}
-            onChange={(e) => setCellulaire(e.target.value)}
-          />
-          <Input
-            label="Fonction"
-            value={fonction}
-            onChange={(e) => setFonction(e.target.value)}
-          />
-          <div className="col-span-2">
-            <Input
-              label="Adresse"
-              value={adresse}
-              onChange={(e) => setAdresse(e.target.value)}
-              placeholder="Adresse postale"
-            />
-          </div>
+          <Input label="Prénom *" value={prenom} onChange={(e) => setPrenom(e.target.value)} required />
+          <Input label="Nom *" value={nom} onChange={(e) => setNom(e.target.value)} required />
+          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input label="Téléphone" type="tel" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
+          <Input label="Fonction" value={fonction} onChange={(e) => setFonction(e.target.value)} />
           <Select
             label="Département"
             value={departementId}
@@ -342,14 +324,11 @@ function ModalAgent({ ouvert, onFermer, agent, departements }: ModalAgentProps) 
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
           <Button type="button" variante="secondaire" onClick={onFermer}>
             Annuler
           </Button>
-          <Button
-            type="submit"
-            chargement={creation.isPending || edition.isPending}
-          >
+          <Button type="submit" chargement={creation.isPending || edition.isPending}>
             {enEdition ? 'Enregistrer' : 'Créer'}
           </Button>
         </div>

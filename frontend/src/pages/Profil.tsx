@@ -4,6 +4,8 @@ import { lireMonProfil, majMonProfil } from '@/api/agents';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { extraireMessageErreur } from '@/api/client';
 import { ROLE_LABELS, roleFromId } from '@/api/types';
 import { formatDateTime } from '@/lib/utils';
@@ -17,19 +19,14 @@ export default function Profil() {
 
   const [email, setEmail] = useState('');
   const [telephone, setTelephone] = useState('');
-  const [cellulaire, setCellulaire] = useState('');
-  const [adresse, setAdresse] = useState('');
   const [mdpActuel, setMdpActuel] = useState('');
   const [nouveauMdp, setNouveauMdp] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [message, setMessage] = useState<{ type: 'succes' | 'erreur'; text: string } | null>(null);
 
-  // Synchroniser les champs quand le profil arrive
-  if (profil && email === '' && telephone === '' && cellulaire === '' && adresse === '') {
+  if (profil && email === '' && telephone === '') {
     setEmail(profil.email ?? '');
     setTelephone(profil.telephone ?? '');
-    setCellulaire(profil.cellulaire ?? '');
-    setAdresse(profil.adresse ?? '');
   }
 
   const mutation = useMutation({
@@ -41,25 +38,19 @@ export default function Profil() {
       setConfirmation('');
       queryClient.invalidateQueries({ queryKey: ['mon-profil'] });
     },
-    onError: (err) => {
-      setMessage({ type: 'erreur', text: extraireMessageErreur(err) });
-    },
+    onError: (err) => setMessage({ type: 'erreur', text: extraireMessageErreur(err) }),
   });
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setMessage(null);
-
     if (nouveauMdp && nouveauMdp !== confirmation) {
       setMessage({ type: 'erreur', text: 'Les deux mots de passe doivent être identiques' });
       return;
     }
-
     const body: Parameters<typeof majMonProfil>[0] = {
       email: email || null,
       telephone: telephone || null,
-      cellulaire: cellulaire || null,
-      adresse: adresse || null,
     };
     if (nouveauMdp) {
       body.mot_de_passe_actuel = mdpActuel;
@@ -69,71 +60,59 @@ export default function Profil() {
   }
 
   if (isLoading || !profil) {
-    return <div className="p-6 text-gray-500">Chargement…</div>;
+    return <div className="p-6 text-slate-500 text-sm">Chargement…</div>;
   }
 
   return (
-    <div className="p-6 max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Mon profil</h1>
+    <div className="p-6 max-w-3xl space-y-6">
+      <PageHeader titre="Mon profil" sousTitre="Gère tes informations et ton mot de passe." />
 
+      {/* Carte d'identité visuelle */}
       <Card>
-        <CardHeader>
-          <CardTitle>Informations</CardTitle>
-        </CardHeader>
-        <CardBody>
-          <dl className="grid grid-cols-2 gap-y-3 text-sm">
-            <dt className="text-gray-500">Login</dt>
-            <dd className="font-mono text-gray-900">{profil.login}</dd>
-            <dt className="text-gray-500">Nom</dt>
-            <dd className="text-gray-900">{profil.nom}</dd>
-            <dt className="text-gray-500">Prénom</dt>
-            <dd className="text-gray-900">{profil.prenom}</dd>
-            <dt className="text-gray-500">Fonction</dt>
-            <dd className="text-gray-900">{profil.fonction ?? '—'}</dd>
-            <dt className="text-gray-500">Rôle</dt>
-            <dd className="text-gray-900">{ROLE_LABELS[roleFromId(profil.role_id)]}</dd>
-            <dt className="text-gray-500">Dernière connexion</dt>
-            <dd className="text-gray-900">{formatDateTime(profil.derniere_connexion)}</dd>
-          </dl>
+        <CardBody className="p-6 flex items-center gap-5">
+          <div className="h-20 w-20 rounded-2xl bg-gradient-brand shadow-soft flex items-center justify-center text-white text-2xl font-bold tracking-tight">
+            {profil.prenom[0]?.toUpperCase()}
+            {profil.nom[0]?.toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+              {profil.prenom} {profil.nom}
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">{profil.fonction ?? '—'}</p>
+            <div className="flex items-center gap-2 mt-3">
+              <Badge variante="violet">{ROLE_LABELS[roleFromId(profil.role_id)]}</Badge>
+              <span className="text-xs text-slate-400 font-mono">{profil.login}</span>
+            </div>
+          </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Dernière connexion</p>
+            <p className="text-sm text-slate-700 mt-1">{formatDateTime(profil.derniere_connexion)}</p>
+          </div>
         </CardBody>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Modifier mes coordonnées</CardTitle>
+          <CardTitle>Coordonnées</CardTitle>
         </CardHeader>
         <CardBody>
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-5">
             <Input
               label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Téléphone fixe"
-                type="tel"
-                value={telephone}
-                onChange={(e) => setTelephone(e.target.value)}
-              />
-              <Input
-                label="Cellulaire"
-                type="tel"
-                value={cellulaire}
-                onChange={(e) => setCellulaire(e.target.value)}
-              />
-            </div>
             <Input
-              label="Adresse"
-              value={adresse}
-              onChange={(e) => setAdresse(e.target.value)}
-              placeholder="Adresse postale"
+              label="Téléphone"
+              type="tel"
+              value={telephone}
+              onChange={(e) => setTelephone(e.target.value)}
             />
 
-            <div className="border-t pt-4 mt-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">
-                Changer mon mot de passe (optionnel)
+            <div className="pt-4 border-t border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900 mb-3 tracking-tight">
+                Changer mon mot de passe
               </h3>
               <div className="space-y-3">
                 <Input
@@ -152,7 +131,7 @@ export default function Profil() {
                   minLength={8}
                 />
                 <Input
-                  label="Confirmer le nouveau mot de passe"
+                  label="Confirmer"
                   type="password"
                   autoComplete="new-password"
                   value={confirmation}
@@ -173,7 +152,7 @@ export default function Profil() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-2 border-t border-slate-100">
               <Button type="submit" chargement={mutation.isPending}>
                 Enregistrer
               </Button>

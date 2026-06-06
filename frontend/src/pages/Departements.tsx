@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Pencil, Plus } from 'lucide-react';
+import { Ban, LayoutGrid, Pencil, Plus } from 'lucide-react';
 import {
   creerDepartement,
   desactiverDepartement,
@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { extraireMessageErreur } from '@/api/client';
 
 export default function Departements() {
@@ -31,83 +33,93 @@ export default function Departements() {
     onError: (err) => alert(extraireMessageErreur(err)),
   });
 
-  if (isLoading) {
-    return <div className="p-6 text-gray-500">Chargement…</div>;
-  }
-
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Départements</h1>
-          <p className="text-gray-600 text-sm mt-1">
-            Services de l'organisation auxquels les agents sont affectés.
-          </p>
-        </div>
-        <Button onClick={() => { setEnEdition(null); setModalOuvert(true); }}>
-          <Plus className="h-4 w-4" /> Nouveau département
-        </Button>
-      </div>
+      <PageHeader
+        titre="Départements"
+        sousTitre="Services de l'organisation auxquels les agents sont affectés."
+        actions={
+          <Button onClick={() => { setEnEdition(null); setModalOuvert(true); }}>
+            <Plus className="h-4 w-4" /> Nouveau département
+          </Button>
+        }
+      />
 
-      <Card>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
-            <tr>
-              <th className="px-4 py-3">Code</th>
-              <th className="px-4 py-3">Libellé</th>
-              <th className="px-4 py-3">Statut</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {departements.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
-                  Aucun département.
-                </td>
+      <Card className="overflow-hidden">
+        {isLoading && <div className="p-8 text-center text-slate-500 text-sm">Chargement…</div>}
+        {!isLoading && departements.length === 0 && (
+          <EmptyState
+            icone={LayoutGrid}
+            titre="Aucun département"
+            message="Crée le premier service avec « Nouveau département »."
+            action={
+              <Button onClick={() => { setEnEdition(null); setModalOuvert(true); }}>
+                <Plus className="h-4 w-4" /> Nouveau département
+              </Button>
+            }
+          />
+        )}
+        {!isLoading && departements.length > 0 && (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Code
+                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Libellé
+                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Statut
+                </th>
+                <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Actions
+                </th>
               </tr>
-            )}
-            {departements.map((d) => (
-              <tr key={d.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono text-gray-700">{d.code ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-900">{d.libelle}</td>
-                <td className="px-4 py-3">
-                  {d.actif ? (
-                    <Badge variante="succes">Actif</Badge>
-                  ) : (
-                    <Badge variante="erreur">Désactivé</Badge>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="inline-flex gap-2">
-                    <Button
-                      variante="fantome"
-                      taille="sm"
-                      onClick={() => { setEnEdition(d); setModalOuvert(true); }}
-                      title="Modifier"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    {d.actif && (
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {departements.map((d) => (
+                <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-600">{d.code ?? '—'}</td>
+                  <td className="px-5 py-3.5 text-slate-900 font-medium">{d.libelle}</td>
+                  <td className="px-5 py-3.5">
+                    {d.actif ? (
+                      <Badge variante="succes" pastille>Actif</Badge>
+                    ) : (
+                      <Badge variante="erreur" pastille>Désactivé</Badge>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <div className="inline-flex gap-1">
                       <Button
                         variante="fantome"
                         taille="sm"
-                        onClick={() => {
-                          if (confirm(`Désactiver le département « ${d.libelle} » ?`)) {
-                            desactivation.mutate(d.id);
-                          }
-                        }}
-                        title="Désactiver"
+                        onClick={() => { setEnEdition(d); setModalOuvert(true); }}
+                        title="Modifier"
                       >
-                        <Ban className="h-4 w-4 text-red-600" />
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      {d.actif && (
+                        <Button
+                          variante="fantome"
+                          taille="sm"
+                          onClick={() => {
+                            if (confirm(`Désactiver le département « ${d.libelle} » ?`)) {
+                              desactivation.mutate(d.id);
+                            }
+                          }}
+                          title="Désactiver"
+                        >
+                          <Ban className="h-4 w-4 text-red-500" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
 
       <ModalDepartement
@@ -119,15 +131,13 @@ export default function Departements() {
   );
 }
 
-// ---------------------------------------------------------------------------
-
-interface ModalDepartementProps {
+interface ModalDepProps {
   ouvert: boolean;
   onFermer: () => void;
   departement: Departement | null;
 }
 
-function ModalDepartement({ ouvert, onFermer, departement }: ModalDepartementProps) {
+function ModalDepartement({ ouvert, onFermer, departement }: ModalDepProps) {
   const queryClient = useQueryClient();
   const enEdition = departement !== null;
 
@@ -136,7 +146,6 @@ function ModalDepartement({ ouvert, onFermer, departement }: ModalDepartementPro
   const [erreur, setErreur] = useState<string | null>(null);
 
   if (ouvert && enEdition && departement && libelle !== departement.libelle && code !== departement.code) {
-    // Resync — pas idéal mais fonctionne pour un v1
     setCode(departement.code ?? '');
     setLibelle(departement.libelle);
     setErreur(null);
@@ -165,7 +174,6 @@ function ModalDepartement({ ouvert, onFermer, departement }: ModalDepartementPro
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setErreur(null);
-
     if (enEdition && departement) {
       edition.mutate({ id: departement.id, body: { code: code || null, libelle } });
     } else {
@@ -193,17 +201,13 @@ function ModalDepartement({ ouvert, onFermer, departement }: ModalDepartementPro
           onChange={(e) => setLibelle(e.target.value)}
           required
         />
-
         {erreur && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {erreur}
           </div>
         )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variante="secondaire" onClick={onFermer}>
-            Annuler
-          </Button>
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <Button type="button" variante="secondaire" onClick={onFermer}>Annuler</Button>
           <Button type="submit" chargement={creation.isPending || edition.isPending}>
             {enEdition ? 'Enregistrer' : 'Créer'}
           </Button>
