@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, FileText, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, FileText, MapPin, Plus, Search, Trash2 } from 'lucide-react';
 import { listerDocuments, supprimerDocument } from '@/api/documents';
 import { listerCategories } from '@/api/referentiels';
 import type { Document } from '@/api/types';
@@ -159,6 +159,9 @@ export default function Documents() {
                     Date doc
                   </th>
                   <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Emplacement
+                  </th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     Statut
                   </th>
                   <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -199,6 +202,26 @@ export default function Documents() {
                       {formatTaille(d.taille_octets)}
                     </td>
                     <td className="px-5 py-3.5 text-slate-600">{formatDate(d.date_document)}</td>
+                    <td className="px-5 py-3.5">
+                      {d.emplacement ? (
+                        <div className="flex items-start gap-1.5 max-w-xs">
+                          <MapPin className="h-3.5 w-3.5 text-brand-600 mt-0.5 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-mono text-xs text-slate-700">
+                              {d.emplacement.code_complet}
+                            </p>
+                            <p
+                              className="text-xs text-slate-500 truncate"
+                              title={`${d.emplacement.site_libelle} → ${d.emplacement.sous_dossier_libelle}`}
+                            >
+                              {d.emplacement.sous_dossier_libelle}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       <StatutBadge statut={d.statut} />
                     </td>

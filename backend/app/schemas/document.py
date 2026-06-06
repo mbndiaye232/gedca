@@ -8,6 +8,15 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class EmplacementResume(BaseModel):
+    """Emplacement physique résumé pour la liste des documents."""
+
+    sous_dossier_id: int
+    code_complet: str  # ex: "01.01.01.001.01.01"
+    sous_dossier_libelle: str
+    site_libelle: str
+
+
 class DocumentLecture(BaseModel):
     """Sortie standard d'un document (métadonnées, sans le contenu binaire)."""
 
@@ -31,6 +40,8 @@ class DocumentLecture(BaseModel):
     statut: str
     # Champ Python `meta_donnees` ↔ clé JSON `metadata` (compat client / vocabulaire métier).
     meta_donnees: dict[str, Any] = Field(serialization_alias="metadata")
+    # Emplacement physique optionnel (null si le document n'est pas archivé physiquement)
+    emplacement: EmplacementResume | None = None
     created_at: datetime
     created_by: int | None
     updated_at: datetime

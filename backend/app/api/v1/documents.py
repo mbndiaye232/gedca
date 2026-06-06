@@ -26,7 +26,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import (
@@ -42,11 +42,61 @@ from app.schemas.document import (
     DocumentLecture,
     DocumentMetadonnees,
     DocumentMiseAJour,
+    EmplacementResume,
 )
 from app.services.audit import journaliser
 from app.services.storage import stocker, stream_dechiffre
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+async def _emplacements_pour(
+    db, document_ids: list[int], tenant_id: int
+) -> dict[int, EmplacementResume]:
+    """Renvoie un mapping {document_id: EmplacementResume} pour les ids fournis.
+
+    Un seul SQL — JOIN sur les 6 niveaux + filtre tenant via sites.tenant_id.
+    Renvoie un dict vide si la liste est vide.
+    """
+    if not document_ids:
+        return {}
+    sql = text(
+        """
+        SELECT
+            dsd.document_id,
+            sd.id AS sous_dossier_id,
+            format('%02s.%02s.%02s.%03s.%02s.%02s',
+                s.numero, l.numero, r.numero, b.numero, d.numero, sd.numero
+            ) AS code_complet,
+            sd.libelle AS sous_dossier_libelle,
+            s.libelle AS site_libelle
+        FROM documents_sous_dossiers dsd
+        JOIN sous_dossiers sd ON sd.id = dsd.sous_dossier_id
+        JOIN dossiers_classeurs d ON d.id = sd.dossier_id
+        JOIN boites b              ON b.id = d.boite_id
+        JOIN rayons r              ON r.id = b.rayon_id
+        JOIN locaux_salles l       ON l.id = r.local_id
+        JOIN sites s               ON s.id = l.site_id
+        WHERE dsd.document_id = ANY(:doc_ids) AND s.tenant_id = :tenant_id
+        """
+    )
+    rows = (
+        await db.execute(sql, {"doc_ids": document_ids, "tenant_id": tenant_id})
+    ).mappings().all()
+    return {
+        r["document_id"]: EmplacementResume(
+            sous_dossier_id=r["sous_dossier_id"],
+            code_complet=r["code_complet"],
+            sous_dossier_libelle=r["sous_dossier_libelle"],
+            site_libelle=r["site_libelle"],
+        )
+        for r in rows
+    }
+
+
+def _enrichir(doc: Document, emp: EmplacementResume | None) -> DocumentLecture:
+    """Construit un DocumentLecture en injectant l'emplacement."""
+    return DocumentLecture.model_validate(doc).model_copy(update={"emplacement": emp})
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +268,11 @@ async def lister(
 
     base = base.order_by(Document.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(base)
-    return list(result.scalars())
+    documents = list(result.scalars())
+    emplacements = await _emplacements_pour(
+        db, [d.id for d in documents], agent.tenant_id
+    )
+    return [_enrichir(d, emplacements.get(d.id)) for d in documents]
 
 
 def _normaliser_pour_tsquery(q: str) -> str:
@@ -243,14 +297,15 @@ def _normaliser_pour_tsquery(q: str) -> str:
 )
 async def lire(
     document_id: int, agent: AgentCourant, db: SessionDB
-) -> Document:
+) -> DocumentLecture:
     doc = await _charger(db, document_id, agent.tenant_id)
     if doc.confidentiel and agent.role.code == "agent_standard":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Document confidentiel — accès restreint",
         )
-    return doc
+    emplacements = await _emplacements_pour(db, [doc.id], agent.tenant_id)
+    return _enrichir(doc, emplacements.get(doc.id))
 
 
 @router.put(
