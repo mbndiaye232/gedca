@@ -7,6 +7,7 @@ from app.api.v1 import (
     archivage,
     audit_log,
     auth,
+    courriers,
     departements,
     documents,
     referentiels,
@@ -22,3 +23,4 @@ api_router.include_router(audit_log.router)
 api_router.include_router(documents.router)
 api_router.include_router(referentiels.router)
 api_router.include_router(archivage.router)
+api_router.include_router(courriers.router)
