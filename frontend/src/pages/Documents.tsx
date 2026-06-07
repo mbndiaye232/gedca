@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, FileText, MapPin, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, FileText, FolderUp, MapPin, Plus, Search, Trash2 } from 'lucide-react';
 import { listerDocuments, supprimerDocument } from '@/api/documents';
 import { listerCategories } from '@/api/referentiels';
 import type { Document } from '@/api/types';
@@ -70,11 +70,18 @@ export default function Documents() {
         sousTitre="Bibliothèque chiffrée. Recherche plein texte sur titre, mots-clés et contenu OCR."
         actions={
           peutUploader && (
-            <Link to="/documents/nouveau">
-              <Button>
-                <Plus className="h-4 w-4" /> Nouveau document
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link to="/documents/importer">
+                <Button variante="secondaire">
+                  <FolderUp className="h-4 w-4" /> Importer un dossier
+                </Button>
+              </Link>
+              <Link to="/documents/nouveau">
+                <Button>
+                  <Plus className="h-4 w-4" /> Nouveau document
+                </Button>
+              </Link>
+            </div>
           )
         }
       />
