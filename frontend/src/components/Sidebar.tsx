@@ -79,15 +79,17 @@ export function Sidebar() {
       {/* Logo / brand */}
       <div className="px-5 py-5 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-brand shadow-sm flex items-center justify-center text-white font-bold tracking-tight">
-            G
-          </div>
+          <img
+            src="/icone_application.png"
+            alt="Soft GEDCAP"
+            className="h-10 w-10 rounded-xl shadow-sm object-contain bg-white"
+          />
           <div>
             <h1 className="text-base font-bold text-slate-900 tracking-tight leading-none">
-              GEDCA
+              Soft GEDCAP
             </h1>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 mt-1">
-              Gestion documentaire
+              GED · GEC · Archivage
             </p>
           </div>
         </div>

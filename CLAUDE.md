@@ -1,6 +1,8 @@
-# GEDCA — Instructions pour Claude Code
+# Soft GEDCAP — Instructions pour Claude Code
 
-Application web de **G**estion **É**lectronique de **D**ocuments + **G**estion **É**lectronique de **C**ourriers + **A**rchivage physique. Conversion d'une application desktop WinDev existante (« SOFT GED-GEC-ARCHIVAGE » de 2S Technology) vers une stack web moderne.
+**Soft GEDCAP** = **G**estion **É**lectronique de **D**ocuments, **C**ourriers et **A**rchives **P**hysiques.
+
+Conversion d'une application desktop WinDev existante (« SOFT GED-GEC-ARCHIVAGE » de 2S Technology) vers une stack web moderne.
 
 ## Sources de référence
 
