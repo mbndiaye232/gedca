@@ -16,6 +16,7 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     File,
     Form,
     HTTPException,
@@ -47,6 +48,10 @@ from app.schemas.document import (
 )
 from app.services.audit import journaliser
 from app.services.storage import stocker, stream_dechiffre
+from app.tasks.extraction_doc import (
+    STATUT_OCR_EN_ATTENTE,
+    extraire_et_indexer,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -127,6 +132,7 @@ async def uploader(
     db: SessionDB,
     agent: AgentArchivisteOuPlus,
     ip: IpClient,
+    background_tasks: BackgroundTasks,
     fichier: Annotated[UploadFile, File(description="Fichier binaire à uploader")],
     metadonnees: Annotated[
         str,
@@ -199,7 +205,9 @@ async def uploader(
         date_numerisation=datetime.now(timezone.utc),
         confidentiel=meta.confidentiel,
         origine="upload",
-        statut="pret",
+        # Le statut est mis à "ocr_en_attente" — la background task qui
+        # extrait le texte le passera à "pret" ou "ocr_echoue".
+        statut=STATUT_OCR_EN_ATTENTE,
         created_by=agent.id,
     )
     db.add(document)
@@ -239,6 +247,11 @@ async def uploader(
     )
     await db.commit()
     await db.refresh(document)
+
+    # Lance l'extraction de texte en arrière-plan. La tâche ouvre sa propre
+    # session DB — elle ne dépend pas de celle de la requête.
+    background_tasks.add_task(extraire_et_indexer, document.id, agent.tenant_id)
+
     return document
 
 
@@ -286,13 +299,17 @@ async def lister(
         )
     if q:
         # Recherche FTS sur recherche_fts (déjà tsvector french_unaccent)
-        base = base.where(
-            func.to_tsquery("french_unaccent", _normaliser_pour_tsquery(q)).op("@@")(
-                Document.recherche_fts
-            )
+        tsquery = func.to_tsquery("french_unaccent", _normaliser_pour_tsquery(q))
+        base = base.where(tsquery.op("@@")(Document.recherche_fts))
+        # Tri par pertinence — ts_rank pondère selon les poids du tsvector
+        # (A=titre, B=mots_cles/résumé, C=contenu OCR).
+        base = base.order_by(
+            func.ts_rank(Document.recherche_fts, tsquery).desc(),
+            Document.created_at.desc(),
         )
-
-    base = base.order_by(Document.created_at.desc()).limit(limit).offset(offset)
+    else:
+        base = base.order_by(Document.created_at.desc())
+    base = base.limit(limit).offset(offset)
     result = await db.execute(base)
     documents = list(result.scalars())
     emplacements = await _emplacements_pour(
@@ -419,6 +436,51 @@ async def maj(
     # Recharge l'emplacement frais pour que la réponse soit complète et
     # que le frontend n'ait pas besoin d'un round-trip supplémentaire.
     emplacements = await _emplacements_pour(db, [doc.id], agent.tenant_id)
+    return _enrichir(doc, emplacements.get(doc.id))
+
+
+@router.post(
+    "/{document_id}/reextraire",
+    response_model=DocumentLecture,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Relancer l'extraction de texte (archiviste ou superviseur)",
+)
+async def reextraire(
+    document_id: int,
+    archiviste: AgentArchivisteOuPlus,
+    db: SessionDB,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    ip: IpClient,
+) -> DocumentLecture:
+    """Relance l'extraction de texte d'un document existant.
+
+    Utile après une mise à jour de la stratégie d'OCR (changement de pack
+    de langue, passage de Tesseract à un autre provider, etc.) ou pour
+    récupérer les documents marqués `ocr_echoue` après un fix
+    d'environnement (Tesseract réinstallé, par exemple).
+    """
+    doc = await _charger(db, document_id, archiviste.tenant_id)
+
+    # Marqué "en attente" pour que l'UI montre immédiatement que ça bouge
+    doc.statut = STATUT_OCR_EN_ATTENTE
+    await journaliser(
+        db,
+        tenant_id=archiviste.tenant_id,
+        agent_id=archiviste.id,
+        action="document.reextraire",
+        entite="documents",
+        entite_id=doc.id,
+        payload={"statut_avant": doc.statut},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(doc)
+
+    background_tasks.add_task(extraire_et_indexer, doc.id, archiviste.tenant_id)
+
+    emplacements = await _emplacements_pour(db, [doc.id], archiviste.tenant_id)
     return _enrichir(doc, emplacements.get(doc.id))
 
 

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, FileText, FolderUp, MapPin, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { listerDocuments, supprimerDocument } from '@/api/documents';
+import { Eye, FileText, FolderUp, MapPin, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { listerDocuments, reextraireDocument, supprimerDocument } from '@/api/documents';
 import { listerCategories } from '@/api/referentiels';
 import type { Document } from '@/api/types';
 import { ModalEditDocument } from '@/components/ModalEditDocument';
@@ -63,6 +63,12 @@ export default function Documents() {
 
   const suppression = useMutation({
     mutationFn: supprimerDocument,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+    onError: (err) => alert(extraireMessageErreur(err)),
+  });
+
+  const reextraction = useMutation({
+    mutationFn: reextraireDocument,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
     onError: (err) => alert(extraireMessageErreur(err)),
   });
@@ -281,6 +287,21 @@ export default function Documents() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                         )}
+                        {peutUploader && d.statut === 'ocr_echoue' && (
+                          <Button
+                            variante="fantome"
+                            taille="sm"
+                            onClick={() => reextraction.mutate(d.id)}
+                            title="Relancer l'extraction OCR"
+                            disabled={reextraction.isPending}
+                          >
+                            <RefreshCw
+                              className={`h-4 w-4 text-amber-600 ${
+                                reextraction.isPending ? 'animate-spin' : ''
+                              }`}
+                            />
+                          </Button>
+                        )}
                         {peutSupprimer && (
                           <Button
                             variante="fantome"
@@ -333,6 +354,22 @@ export default function Documents() {
 function StatutBadge({ statut }: { statut: string }) {
   if (statut === 'pret') return <Badge variante="succes" pastille>Prêt</Badge>;
   if (statut === 'en_cours') return <Badge variante="info" pastille>En traitement</Badge>;
+  if (statut === 'ocr_en_attente')
+    return (
+      <Badge variante="info" pastille title="Texte en cours d'extraction pour la recherche">
+        OCR en cours
+      </Badge>
+    );
+  if (statut === 'ocr_echoue')
+    return (
+      <Badge
+        variante="attention"
+        pastille
+        title="L'extraction a échoué (Tesseract absent ou fichier incompatible)"
+      >
+        OCR échoué
+      </Badge>
+    );
   if (statut === 'quarantaine') return <Badge variante="erreur" pastille>Quarantaine</Badge>;
   return <Badge>{statut}</Badge>;
 }

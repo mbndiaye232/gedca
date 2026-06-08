@@ -55,6 +55,18 @@ export async function supprimerDocument(id: number): Promise<Document> {
 }
 
 /**
+ * Relance l'extraction de texte (OCR + indexation FTS).
+ *
+ * Utile pour les documents marqués `ocr_echoue` après un fix
+ * d'environnement (Tesseract installé), ou pour rejouer après un
+ * changement de stratégie d'extraction.
+ */
+export async function reextraireDocument(id: number): Promise<Document> {
+  const { data } = await api.post<Document>(`/documents/${id}/reextraire`);
+  return data;
+}
+
+/**
  * Récupère le contenu déchiffré comme Blob.
  *
  * Le Bearer token est injecté automatiquement par l'intercepteur axios.
