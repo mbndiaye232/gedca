@@ -197,6 +197,11 @@ export interface DocumentMiseAJour {
   type_document_id?: number | null;
   date_document?: string | null;
   confidentiel?: boolean;
+  /**
+   * Lien physique vers un sous-dossier. Présent dans le JSON et `null` retire
+   * le lien existant ; champ omis = pas de modification.
+   */
+  sous_dossier_id?: number | null;
 }
 
 export interface Categorie {

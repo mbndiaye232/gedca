@@ -26,7 +26,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import (
@@ -258,6 +258,10 @@ async def lister(
     q: str | None = Query(None, description="Recherche plein texte"),
     categorie_id: int | None = Query(None),
     statut: str | None = Query(None),
+    incomplete: bool = Query(
+        False,
+        description="Si true, ne retourne que les documents avec thématique OU type de document manquant",
+    ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[Document]:
@@ -270,6 +274,16 @@ async def lister(
         base = base.where(Document.statut == statut)
     if categorie_id is not None:
         base = base.where(Document.categorie_id == categorie_id)
+    if incomplete:
+        # Métadonnées incomplètes = au moins une dimension de classement
+        # secondaire manquante. La catégorie est obligatoire à la création
+        # donc on ne la teste pas ici ; on cible les imports en masse.
+        base = base.where(
+            or_(
+                Document.thematique_id.is_(None),
+                Document.type_document_id.is_(None),
+            )
+        )
     if q:
         # Recherche FTS sur recherche_fts (déjà tsvector french_unaccent)
         base = base.where(
@@ -332,7 +346,7 @@ async def maj(
     db: SessionDB,
     agent: AgentCourant,
     ip: IpClient,
-) -> Document:
+) -> DocumentLecture:
     doc = await _charger(db, document_id, agent.tenant_id)
 
     # Droits : archiviste / superviseur / créateur
@@ -366,8 +380,27 @@ async def maj(
             diff[champ] = nouvelle if not isinstance(nouvelle, (datetime,)) else nouvelle.isoformat()
             setattr(doc, champ, nouvelle)
 
+    # Emplacement physique (relation N:N) : on n'agit que si le champ est
+    # explicitement présent dans le JSON. `null` = retirer le lien, valeur
+    # entière = remplacer le lien existant.
+    if "sous_dossier_id" in body.model_fields_set:
+        await db.execute(
+            delete(DocumentSousDossier).where(
+                DocumentSousDossier.document_id == doc.id
+            )
+        )
+        if body.sous_dossier_id is not None:
+            db.add(
+                DocumentSousDossier(
+                    document_id=doc.id,
+                    sous_dossier_id=body.sous_dossier_id,
+                )
+            )
+        diff["sous_dossier_id"] = body.sous_dossier_id
+
     if not diff:
-        return doc
+        emplacements = await _emplacements_pour(db, [doc.id], agent.tenant_id)
+        return _enrichir(doc, emplacements.get(doc.id))
 
     doc.updated_by = agent.id
     await journaliser(
@@ -383,7 +416,10 @@ async def maj(
     )
     await db.commit()
     await db.refresh(doc)
-    return doc
+    # Recharge l'emplacement frais pour que la réponse soit complète et
+    # que le frontend n'ait pas besoin d'un round-trip supplémentaire.
+    emplacements = await _emplacements_pour(db, [doc.id], agent.tenant_id)
+    return _enrichir(doc, emplacements.get(doc.id))
 
 
 @router.delete(

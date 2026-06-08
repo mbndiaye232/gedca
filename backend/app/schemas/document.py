@@ -78,7 +78,17 @@ class DocumentMetadonnees(BaseModel):
 
 
 class DocumentMiseAJour(BaseModel):
-    """Body de PUT /api/documents/{id} (modification métadonnées)."""
+    """Body de PUT /api/documents/{id} (modification métadonnées).
+
+    Convention :
+    - Un champ omis du JSON → non modifié (détecté via `model_fields_set`).
+    - Un champ présent avec `null` → effacé (utile pour `sous_dossier_id` :
+      `null` retire le lien vers le sous-dossier physique).
+
+    Les champs scalaires utilisent encore la convention historique
+    "is not None" dans l'endpoint, donc on ne peut pas vider une thématique
+    ou un type via PUT pour l'instant — pas un blocage métier connu.
+    """
 
     titre: str | None = Field(None, min_length=1, max_length=512)
     description: str | None = None
@@ -89,6 +99,7 @@ class DocumentMiseAJour(BaseModel):
     type_document_id: int | None = None
     date_document: date | None = None
     confidentiel: bool | None = None
+    sous_dossier_id: int | None = None
 
 
 class DocumentVersionLecture(BaseModel):

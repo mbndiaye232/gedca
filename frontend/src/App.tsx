@@ -10,6 +10,7 @@ import Structure from './pages/Structure';
 import AuditLog from './pages/AuditLog';
 import Documents from './pages/Documents';
 import DocumentNouveau from './pages/DocumentNouveau';
+import DocumentsImporter from './pages/DocumentsImporter';
 import Archivage from './pages/Archivage';
 import Referentiels from './pages/Referentiels';
 import Courriers from './pages/Courriers';
@@ -36,6 +37,7 @@ export default function App() {
       <Route element={<RequireAuth roles={['archiviste', 'superviseur']} />}>
         <Route element={<Layout />}>
           <Route path="/documents/nouveau" element={<DocumentNouveau />} />
+          <Route path="/documents/importer" element={<DocumentsImporter />} />
           <Route path="/archivage" element={<Archivage />} />
         </Route>
       </Route>

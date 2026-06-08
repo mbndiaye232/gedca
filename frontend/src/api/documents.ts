@@ -5,6 +5,8 @@ export interface ListerParams {
   q?: string;
   categorie_id?: number;
   statut?: string;
+  /** Si true, ne retourne que les documents avec thématique OU type de document manquant. */
+  incomplete?: boolean;
   limit?: number;
   offset?: number;
 }
