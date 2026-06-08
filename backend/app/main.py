@@ -13,7 +13,7 @@ from app.api.v1 import api_router
 from app.config import get_settings
 from app.services.crypto import ConfigurationCryptoError, _cle_maitre
 
-logger = logging.getLogger("gedca")
+logger = logging.getLogger("soft_gedcap")
 
 
 @asynccontextmanager
@@ -27,21 +27,21 @@ async def lifespan(_app: FastAPI):
         logger.error("Configuration cryptographique invalide : %s", exc)
         raise
     logger.info(
-        "GEDCA démarré (mode=%s, ai_provider=%s, version=%s)",
+        "Soft GEDCAP démarré (mode=%s, ai_provider=%s, version=%s)",
         settings.deployment_mode,
         settings.ai_provider,
         __version__,
     )
     yield
-    logger.info("GEDCA arrêté.")
+    logger.info("Soft GEDCAP arrêté.")
 
 
 app = FastAPI(
-    title="GEDCA API",
+    title="Soft GEDCAP API",
     version=__version__,
     description=(
-        "API GEDCA — Gestion Électronique de Documents, Gestion Électronique de Courriers, "
-        "Archivage physique."
+        "API Soft GEDCAP — Gestion Électronique de Documents, Courriers et "
+        "Archives Physiques."
     ),
     lifespan=lifespan,
 )

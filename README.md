@@ -1,6 +1,6 @@
-# GEDCA — Web
+# Soft GEDCAP — Web
 
-Application web de **G**estion **É**lectronique de **D**ocuments + **G**estion **É**lectronique de **C**ourriers + **A**rchivage physique.
+**Soft GEDCAP** — **G**estion **É**lectronique de **D**ocuments, **C**ourriers et **A**rchives **P**hysiques.
 
 Conversion en stack web moderne de l'application desktop WinDev historique « SOFT GED-GEC-ARCHIVAGE » (2S Technology, Dakar).
 
