@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, FileText, FolderUp, MapPin, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, FileText, FolderUp, MapPin, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { listerDocuments, supprimerDocument } from '@/api/documents';
 import { listerCategories } from '@/api/referentiels';
 import type { Document } from '@/api/types';
+import { ModalEditDocument } from '@/components/ModalEditDocument';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -37,15 +38,21 @@ export default function Documents() {
   const [recherche, setRecherche] = useState('');
   const [rechercheActive, setRechercheActive] = useState('');
   const [categorieFiltre, setCategorieFiltre] = useState<string>('');
+  const [incompletes, setIncompletes] = useState(false);
   const [visionneuseDoc, setVisionneuseDoc] = useState<Document | null>(null);
   const [emplacementDoc, setEmplacementDoc] = useState<Document | null>(null);
+  const [documentAEditer, setDocumentAEditer] = useState<Document | null>(null);
 
   const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['documents', { q: rechercheActive, categorie_id: categorieFiltre || undefined }],
+    queryKey: [
+      'documents',
+      { q: rechercheActive, categorie_id: categorieFiltre || undefined, incomplete: incompletes },
+    ],
     queryFn: () =>
       listerDocuments({
         q: rechercheActive || undefined,
         categorie_id: categorieFiltre ? Number(categorieFiltre) : undefined,
+        incomplete: incompletes || undefined,
       }),
   });
 
@@ -118,6 +125,21 @@ export default function Documents() {
               Rechercher
             </Button>
           </div>
+          {/* Toggle : ne montrer que les documents avec métadonnées incomplètes
+              (thématique ou type de document manquant). Pratique après un
+              import en masse pour retrouver vite ce qu'il reste à classer. */}
+          <label className="flex items-center gap-2 mt-3 text-sm text-slate-700 cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={incompletes}
+              onChange={(e) => setIncompletes(e.target.checked)}
+              className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            Métadonnées incomplètes seulement
+            <span className="text-xs text-slate-500">
+              (thématique ou type de document manquant)
+            </span>
+          </label>
         </CardBody>
       </Card>
 
@@ -249,6 +271,16 @@ export default function Documents() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        {peutUploader && (
+                          <Button
+                            variante="fantome"
+                            taille="sm"
+                            onClick={() => setDocumentAEditer(d)}
+                            title="Modifier les métadonnées"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         {peutSupprimer && (
                           <Button
                             variante="fantome"
@@ -284,6 +316,16 @@ export default function Documents() {
         emplacement={emplacementDoc?.emplacement ?? null}
         onFermer={() => setEmplacementDoc(null)}
       />
+
+      {/* Le modal est remonté à chaque ouverture via la key, ce qui réinitialise
+          proprement l'état du formulaire à partir du nouveau document. */}
+      {documentAEditer && (
+        <ModalEditDocument
+          key={documentAEditer.id}
+          document={documentAEditer}
+          onFermer={() => setDocumentAEditer(null)}
+        />
+      )}
     </div>
   );
 }
