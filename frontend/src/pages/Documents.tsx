@@ -81,6 +81,8 @@ export default function Documents() {
       <PageHeader
         titre="Documents"
         sousTitre="Bibliothèque chiffrée. Recherche plein texte sur titre, mots-clés et contenu OCR."
+        accent="docs"
+        icone={FileText}
         actions={
           peutUploader && (
             <div className="flex gap-2">
@@ -214,7 +216,7 @@ export default function Documents() {
                   <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-start gap-3">
-                        <div className="h-8 w-8 shrink-0 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center">
+                        <div className="h-8 w-8 shrink-0 rounded-lg bg-docs-50 text-docs-700 flex items-center justify-center ring-1 ring-inset ring-docs-100">
                           <FileText className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">

@@ -37,7 +37,7 @@ const ICONES_CORBEILLE: Record<CorbeilleCode, LucideIcon> = {
 };
 
 const TONS_CORBEILLE: Record<CorbeilleCode, string> = {
-  a_traiter: 'bg-brand-50 text-brand-700 ring-brand-200',
+  a_traiter: 'bg-courriers-50 text-courriers-700 ring-courriers-200',
   traite: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   en_copie: 'bg-sky-50 text-sky-700 ring-sky-200',
   en_retard: 'bg-red-50 text-red-700 ring-red-200',
@@ -80,6 +80,8 @@ export default function Courriers() {
       <PageHeader
         titre="Courriers"
         sousTitre="Espace de travail principal. Sélectionne une corbeille pour voir les courriers à traiter."
+        accent="courriers"
+        icone={Mail}
         actions={
           <Link to="/courriers/nouveau">
             <Button>
@@ -104,8 +106,8 @@ export default function Courriers() {
               className={cn(
                 'relative text-left rounded-2xl border bg-white p-4 transition-all',
                 actif
-                  ? 'border-brand-300 shadow-card ring-2 ring-brand-100'
-                  : 'border-slate-200/70 shadow-card',
+                  ? 'border-courriers-300 shadow-card-hover ring-2 ring-courriers-100'
+                  : 'border-slate-200/70 shadow-card hover:shadow-card-hover',
                 cliquable
                   ? 'hover:shadow-card-hover hover:border-slate-300 cursor-pointer'
                   : 'opacity-60 cursor-not-allowed',
