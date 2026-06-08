@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 
 from fastapi import (
@@ -394,7 +394,12 @@ async def maj(
     ):
         nouvelle = getattr(body, champ)
         if nouvelle is not None and nouvelle != getattr(doc, champ):
-            diff[champ] = nouvelle if not isinstance(nouvelle, (datetime,)) else nouvelle.isoformat()
+            # JSONB ne sait pas sérialiser nativement date/datetime — on convertit
+            # en chaîne ISO 8601. Sans ça, l'INSERT dans audit_log plante avec
+            # `Object of type date is not JSON serializable`.
+            diff[champ] = (
+                nouvelle.isoformat() if isinstance(nouvelle, (date, datetime)) else nouvelle
+            )
             setattr(doc, champ, nouvelle)
 
     # Emplacement physique (relation N:N) : on n'agit que si le champ est
