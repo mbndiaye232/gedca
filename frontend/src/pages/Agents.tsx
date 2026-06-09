@@ -264,7 +264,30 @@ function ModalAgent({ onFermer, agent, departements }: ModalAgentProps) {
       titre={enEdition ? `Modifier ${agent?.prenom} ${agent?.nom}` : 'Nouvel agent'}
       largeur="md"
     >
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4" autoComplete="off">
+        {/* Honey-pot anti-autocomplete Chrome : ces champs cachés
+            capturent l'autocomplete agressif que Chrome impose même
+            quand on lui dit "off" sur le form principal. Sans ça,
+            Chrome remplit le Login et le Password avec les credentials
+            d'un agent récemment créé / connecté. */}
+        <input
+          type="text"
+          name="fake-username"
+          autoComplete="username"
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{ position: 'absolute', left: '-9999px', width: 0, height: 0 }}
+          readOnly
+        />
+        <input
+          type="password"
+          name="fake-password"
+          autoComplete="current-password"
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{ position: 'absolute', left: '-9999px', width: 0, height: 0 }}
+          readOnly
+        />
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Login *"
@@ -272,6 +295,11 @@ function ModalAgent({ onFermer, agent, departements }: ModalAgentProps) {
             onChange={(e) => setLogin(e.target.value)}
             disabled={enEdition}
             required
+            // `new-password` est le seul autoComplete que Chrome
+            // respecte vraiment pour empêcher le remplissage auto
+            // (paradoxalement, sur le champ login aussi).
+            autoComplete="new-password"
+            name="agent-creation-login"
           />
           {!enEdition && (
             <Input
@@ -281,6 +309,8 @@ function ModalAgent({ onFermer, agent, departements }: ModalAgentProps) {
               onChange={(e) => setMotDePasse(e.target.value)}
               minLength={8}
               required
+              autoComplete="new-password"
+              name="agent-creation-password"
             />
           )}
           <Input label="Prénom *" value={prenom} onChange={(e) => setPrenom(e.target.value)} required />
