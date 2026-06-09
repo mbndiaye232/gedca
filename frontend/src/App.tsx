@@ -16,11 +16,15 @@ import Referentiels from './pages/Referentiels';
 import Courriers from './pages/Courriers';
 import CourrierNouveau from './pages/CourrierNouveau';
 import Redirection from './pages/Redirection';
+import ResetMdp from './pages/ResetMdp';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Page publique de réinitialisation de mot de passe (lien envoyé par email).
+          Accessible sans token JWT — c'est elle qui valide le token de reset. */}
+      <Route path="/reset-mdp" element={<ResetMdp />} />
 
       {/* Routes connectées (n'importe quel rôle) */}
       <Route element={<RequireAuth />}>

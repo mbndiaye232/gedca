@@ -19,6 +19,7 @@ from app.api.deps import (
     SessionDB,
 )
 from app.models import Agent
+from app.config import get_settings
 from app.schemas.agent import (
     AgentCreation,
     AgentLecture,
@@ -26,8 +27,11 @@ from app.schemas.agent import (
     AgentMiseAJour,
     MonProfilMiseAJour,
 )
+from app.schemas.reset_mdp import ResetMdpInitieReponse
 from app.services.audit import journaliser
+from app.services.notifications import notifier_lien_reset_mdp
 from app.services.password import hacher_mot_de_passe, verifier_mot_de_passe
+from app.services.reset_mdp import creer_token as creer_token_reset
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -305,6 +309,87 @@ async def desactiver_agent(
     await db.commit()
     await db.refresh(agent)
     return agent
+
+
+@router.post(
+    "/{agent_id}/reset-mdp/initier",
+    response_model=ResetMdpInitieReponse,
+    summary="Réinitialiser le mot de passe d'un agent (envoie un lien par email)",
+)
+async def initier_reset_mdp(
+    agent_id: int,
+    superviseur: AgentSuperviseur,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> ResetMdpInitieReponse:
+    """Génère un lien de réinitialisation et l'envoie par email à l'agent.
+
+    Préconditions :
+    - L'agent existe dans le tenant du superviseur
+    - L'agent est actif (on ne reset pas un compte désactivé)
+    - L'agent a une adresse email enregistrée
+
+    Effet :
+    - Tous les tokens actifs précédents de l'agent sont invalidés
+    - Un nouveau token est généré (token_urlsafe(32), stocké en SHA-256)
+    - Un email est envoyé avec le lien `/reset-mdp?token=...`
+    - Le token brut n'est jamais retourné dans la réponse HTTP
+    """
+    agent = await _charger_agent_du_tenant(db, agent_id, superviseur.tenant_id)
+    if not agent.actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cet agent est désactivé — réactive-le avant de "
+                "réinitialiser son mot de passe."
+            ),
+        )
+    if not agent.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cet agent n'a pas d'adresse email enregistrée. Renseigne "
+                "son email dans son profil avant la réinitialisation."
+            ),
+        )
+
+    # Génère et stocke le token (le hash, pas le brut)
+    token = await creer_token_reset(
+        db, agent_id=agent.id, demande_par_id=superviseur.id
+    )
+    await journaliser(
+        db,
+        tenant_id=superviseur.tenant_id,
+        agent_id=superviseur.id,
+        action="agent.reset_mdp_initie",
+        entite="agents",
+        entite_id=agent.id,
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+
+    # URL frontend : 1ère origine autorisée par CORS (héritée de
+    # ALLOWED_ORIGINS), c'est le défaut le plus sain en dev comme prod.
+    settings = get_settings()
+    url_frontend = (
+        settings.allowed_origins_list[0]
+        if settings.allowed_origins_list
+        else "http://localhost:5173"
+    )
+
+    envoye = await notifier_lien_reset_mdp(
+        agent_destinataire_id=agent.id,
+        demandeur_id=superviseur.id,
+        token_brut=token,
+        tenant_id=superviseur.tenant_id,
+        url_frontend=url_frontend,
+    )
+    return ResetMdpInitieReponse(
+        email_envoye=envoye,
+        destinataire_email=agent.email if envoye else None,
+    )
 
 
 # ----- Helpers internes -------------------------------------------------------

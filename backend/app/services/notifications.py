@@ -49,6 +49,27 @@ Connectez-vous à Soft GEDCAP pour le traiter :
 """
 )
 
+# Réinitialisation de mot de passe — envoyée à l'agent concerné
+TEMPLATE_RESET_MDP = Template(
+    """\
+Bonjour {{ prenom }},
+
+{{ demandeur_prenom }} {{ demandeur_nom }} a demandé la réinitialisation
+de votre mot de passe sur Soft GEDCAP.
+
+Pour définir un nouveau mot de passe, cliquez sur le lien suivant
+(valable {{ duree_heures }} heures, à usage unique) :
+
+{{ url_reset }}
+
+Si vous n'êtes pas à l'origine de cette demande, ignorez ce message —
+votre mot de passe actuel reste valable jusqu'à expiration du lien.
+
+— Notification automatique Soft GEDCAP
+"""
+)
+
+
 # Mise en copie — envoyée à chaque agent nouvellement ajouté en copie
 TEMPLATE_MISE_EN_COPIE = Template(
     """\
@@ -536,6 +557,95 @@ async def notifier_mise_en_copie(
 # ---------------------------------------------------------------------------
 # Alerte de retard
 # ---------------------------------------------------------------------------
+
+
+async def notifier_lien_reset_mdp(
+    agent_destinataire_id: int,
+    demandeur_id: int,
+    token_brut: str,
+    tenant_id: int,
+    url_frontend: str,
+    duree_heures: int = 24,
+) -> bool:
+    """Envoie le lien de réinitialisation de mot de passe à un agent.
+
+    Synchrone (PAS fire-and-forget) pour que le caller sache si l'email
+    a bien été envoyé — on veut afficher un retour utilisateur clair au
+    superviseur. Retourne True si envoyé, False si skip (pas de SMTP,
+    pas d'email destinataire).
+
+    Args:
+        url_frontend: base de l'URL frontend (ex. http://localhost:5173),
+            le lien complet sera `{url_frontend}/reset-mdp?token=...`
+    """
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as db:
+        try:
+            tenant = await db.get(Tenant, tenant_id)
+            agent = await db.get(Agent, agent_destinataire_id)
+            demandeur = await db.get(Agent, demandeur_id)
+            if not (tenant and agent and demandeur):
+                return False
+            if not tenant.smtp_host or not tenant.smtp_user:
+                logger.warning(
+                    "Reset mdp pour agent %s : SMTP non configuré",
+                    agent_destinataire_id,
+                )
+                return False
+            if not agent.email:
+                logger.warning(
+                    "Reset mdp pour agent %s : pas d'email",
+                    agent_destinataire_id,
+                )
+                return False
+
+            smtp_password = ""
+            if tenant.smtp_password_enc:
+                try:
+                    smtp_password = dechiffrer(
+                        tenant.smtp_password_enc, tenant.id, usage="smtp"
+                    ).decode("utf-8")
+                except Exception:  # noqa: BLE001
+                    return False
+
+            url_reset = f"{url_frontend.rstrip('/')}/reset-mdp?token={token_brut}"
+            corps = TEMPLATE_RESET_MDP.render(
+                prenom=agent.prenom,
+                demandeur_prenom=demandeur.prenom,
+                demandeur_nom=demandeur.nom,
+                duree_heures=duree_heures,
+                url_reset=url_reset,
+            )
+            msg = EmailMessage()
+            msg["From"] = tenant.smtp_from or tenant.smtp_user
+            msg["To"] = agent.email
+            msg["Subject"] = "[Soft GEDCAP] Réinitialisation de votre mot de passe"
+            msg.set_content(corps)
+
+            await aiosmtplib.send(
+                msg,
+                hostname=tenant.smtp_host,
+                port=tenant.smtp_port or 587,
+                username=tenant.smtp_user,
+                password=smtp_password,
+                use_tls=False,
+                start_tls=bool(tenant.smtp_use_tls),
+                timeout=15,
+            )
+            await journaliser(
+                db,
+                tenant_id=tenant_id,
+                agent_id=demandeur_id,
+                action="agent.reset_mdp_email_envoye",
+                entite="agents",
+                entite_id=agent_destinataire_id,
+            )
+            await db.commit()
+            return True
+
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Envoi reset mdp échoué : %s", exc)
+            return False
 
 
 async def notifier_alerte_retard(
