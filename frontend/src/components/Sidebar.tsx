@@ -9,6 +9,7 @@ import {
   AtSign,
   ListChecks,
   LayoutGrid,
+  Plane,
   Settings,
   Tags,
   type LucideIcon,
@@ -42,9 +43,10 @@ const GROUPES: Groupe[] = [
   {
     titre: 'Espace de travail',
     entrees: [
-      { vers: '/accueil',    libelle: 'Accueil',    icone: Home,     accent: 'brand' },
-      { vers: '/documents',  libelle: 'Documents',  icone: FileText, accent: 'docs' },
-      { vers: '/courriers',  libelle: 'Courriers',  icone: Mail,     accent: 'courriers' },
+      { vers: '/accueil',     libelle: 'Accueil',     icone: Home,     accent: 'brand' },
+      { vers: '/documents',   libelle: 'Documents',   icone: FileText, accent: 'docs' },
+      { vers: '/courriers',   libelle: 'Courriers',   icone: Mail,     accent: 'courriers' },
+      { vers: '/redirection', libelle: 'Redirection', icone: Plane,    accent: 'courriers' },
     ],
   },
   {

@@ -74,9 +74,11 @@ from app.services.audit import journaliser
 from app.services.notifications import (
     notifier_courrier_valide,
     notifier_demande_validation,
+    notifier_mise_en_copie,
     notifier_nouveau_courrier,
 )
 from app.services.numerotation_courrier import prochain_numero_enregistrement
+from app.services.redirection import resoudre_destinataire_effectif
 from app.services.storage import stocker
 
 from app.config import get_settings
@@ -109,6 +111,7 @@ ACTION_NOTE = 6
 ACTION_AJOUT_DOCUMENT = 7
 ACTION_DEMANDE_VALIDATION = 8  # PRD-06B
 ACTION_VALIDATION = 9          # PRD-06B
+ACTION_REDIRECTION = 10        # Redirection appliquée
 
 
 async def _charger_courrier(
@@ -572,6 +575,17 @@ async def creer(
     # 4. Générer le numéro d'enregistrement (advisory lock)
     numero = await prochain_numero_enregistrement(db, agent.tenant_id)
 
+    # 4bis. Redirection éventuelle (docs/redirection.pdf p. 1) :
+    # si le destinataire a une redirection active, le courrier va au
+    # substitut. `agent_destinataire_id` reste tel qu'on l'a saisi
+    # (info fonctionnelle), c'est `agent_proprietaire_id` qui bouge.
+    redir = await resoudre_destinataire_effectif(
+        db,
+        agent_destinataire_id=body.agent_destinataire_id,
+        tenant_id=agent.tenant_id,
+    )
+    proprietaire_id = redir.agent_effectif_id
+
     # 5. Créer le courrier
     courrier = Courrier(
         tenant_id=agent.tenant_id,
@@ -597,7 +611,7 @@ async def creer(
         statut_id=(
             STATUT_A_FAIRE_VALIDER if body.a_faire_valider else STATUT_A_TRAITER
         ),
-        agent_proprietaire_id=body.agent_destinataire_id,
+        agent_proprietaire_id=proprietaire_id,
         created_by=agent.id,
     )
     db.add(courrier)
@@ -618,6 +632,19 @@ async def creer(
         ACTION_CREATION,
         {"sens": body.sens, "destinataire_id": body.agent_destinataire_id},
     )
+    # 6bis. Trace la redirection si elle a été appliquée
+    if redir.a_redirige:
+        await _ajouter_historique(
+            db,
+            courrier.id,
+            agent.id,
+            ACTION_REDIRECTION,
+            {
+                "destinataire_original_id": body.agent_destinataire_id,
+                "agent_substitut_id": proprietaire_id,
+                "redirection_id": redir.redirection.id if redir.redirection else None,
+            },
+        )
     await journaliser(
         db,
         tenant_id=agent.tenant_id,
@@ -625,7 +652,7 @@ async def creer(
         action="courrier.create",
         entite="courriers",
         entite_id=courrier.id,
-        payload={"numero": numero, "sens": body.sens},
+        payload={"numero": numero, "sens": body.sens, "redirige": redir.a_redirige},
         ip=ip,
         user_agent=request.headers.get("user-agent"),
     )
@@ -633,11 +660,14 @@ async def creer(
     await db.commit()
     await db.refresh(courrier)
 
-    # 7. Notification email asynchrone (fire-and-forget)
-    if body.agent_destinataire_id != agent.id:
+    # 7. Notification email asynchrone (fire-and-forget) — au substitut
+    # si redirection, sinon au destinataire d'origine. Cohérent avec le
+    # PDF redirection p. 3 : "La notification aussi est envoyée à
+    # l'adresse mail fournie pour [le substitut]"
+    if proprietaire_id != agent.id:
         await notifier_nouveau_courrier(
             courrier_id=courrier.id,
-            agent_destinataire_id=body.agent_destinataire_id,
+            agent_destinataire_id=proprietaire_id,
             tenant_id=agent.tenant_id,
         )
 
@@ -721,6 +751,19 @@ async def faire_une_copie(
         )
 
     await db.commit()
+
+    # Notification fire-and-forget aux agents nouvellement en copie
+    # (sauf l'agent qui a réalisé l'action — pas la peine de se notifier).
+    for ajoute_id in ajoutes:
+        if ajoute_id == agent.id:
+            continue
+        await notifier_mise_en_copie(
+            courrier_id=courrier.id,
+            agent_en_copie_id=ajoute_id,
+            agent_ajouteur_id=agent.id,
+            tenant_id=agent.tenant_id,
+        )
+
     return await lire(courrier.id, agent, db)
 
 
@@ -765,10 +808,20 @@ async def imputer(
             detail="Tu es déjà propriétaire de ce courrier.",
         )
 
+    # Redirection éventuelle de la cible (docs/redirection.pdf p. 1).
+    # Si l'agent vers qui on impute est absent, on impute en pratique
+    # vers son substitut. On garde body.agent_impute_id pour la trace.
+    redir = await resoudre_destinataire_effectif(
+        db,
+        agent_destinataire_id=body.agent_impute_id,
+        tenant_id=agent.tenant_id,
+    )
+    nouveau_proprio = redir.agent_effectif_id
+
     ancien_proprio = courrier.agent_proprietaire_id
 
     # Transfert
-    courrier.agent_proprietaire_id = body.agent_impute_id
+    courrier.agent_proprietaire_id = nouveau_proprio
 
     # Ajout ancien proprio en copie (s'il n'y est pas déjà)
     deja_en_copie = await db.scalar(
@@ -784,7 +837,10 @@ async def imputer(
             )
         )
 
-    # Ligne d'imputation
+    # Ligne d'imputation — on enregistre la cible **fonctionnelle**
+    # (body.agent_impute_id) pas le substitut. Ça permet de retrouver
+    # plus tard "à qui Mame voulait imputer", même si la redirection
+    # change. La redirection elle-même est tracée dans l'historique.
     db.add(
         Imputation(
             courrier_id=courrier.id,
@@ -804,6 +860,20 @@ async def imputer(
             "ancien_proprietaire_id": ancien_proprio,
         },
     )
+    # Trace la redirection si elle a été appliquée
+    if redir.a_redirige:
+        await _ajouter_historique(
+            db,
+            courrier.id,
+            agent.id,
+            ACTION_REDIRECTION,
+            {
+                "destinataire_original_id": body.agent_impute_id,
+                "agent_substitut_id": nouveau_proprio,
+                "redirection_id": redir.redirection.id if redir.redirection else None,
+                "contexte": "imputation",
+            },
+        )
     await journaliser(
         db,
         tenant_id=agent.tenant_id,
@@ -811,16 +881,19 @@ async def imputer(
         action="courrier.imputation",
         entite="courriers",
         entite_id=courrier.id,
-        payload={"agent_impute_id": body.agent_impute_id},
+        payload={
+            "agent_impute_id": body.agent_impute_id,
+            "redirige": redir.a_redirige,
+        },
         ip=ip,
         user_agent=request.headers.get("user-agent"),
     )
     await db.commit()
 
-    # Notification au nouvel imputé
+    # Notification au nouvel imputé effectif (substitut si redirection)
     await notifier_nouveau_courrier(
         courrier_id=courrier.id,
-        agent_destinataire_id=body.agent_impute_id,
+        agent_destinataire_id=nouveau_proprio,
         tenant_id=agent.tenant_id,
     )
 
@@ -1109,6 +1182,14 @@ async def repondre(
         imputeur_id = res_imp.scalar_one_or_none()
         destinataire_id = imputeur_id if imputeur_id is not None else agent.id
 
+    # Redirection éventuelle du destinataire de la réponse
+    redir = await resoudre_destinataire_effectif(
+        db,
+        agent_destinataire_id=destinataire_id,
+        tenant_id=agent.tenant_id,
+    )
+    proprietaire_reponse_id = redir.agent_effectif_id
+
     reponse = Courrier(
         tenant_id=agent.tenant_id,
         numero_enregistrement=numero,
@@ -1129,7 +1210,8 @@ async def repondre(
         statut_id=(
             STATUT_A_FAIRE_VALIDER if body.a_faire_valider else STATUT_A_TRAITER
         ),
-        agent_proprietaire_id=destinataire_id,
+        # Redirection appliquée si le destinataire est absent
+        agent_proprietaire_id=proprietaire_reponse_id,
         courrier_origine_id=origine.id,
         created_by=agent.id,
     )
@@ -1147,6 +1229,19 @@ async def repondre(
         ACTION_REPONSE,
         {"reponse_id": reponse.id, "numero": numero},
     )
+    if redir.a_redirige:
+        await _ajouter_historique(
+            db,
+            reponse.id,
+            agent.id,
+            ACTION_REDIRECTION,
+            {
+                "destinataire_original_id": destinataire_id,
+                "agent_substitut_id": proprietaire_reponse_id,
+                "redirection_id": redir.redirection.id if redir.redirection else None,
+                "contexte": "reponse",
+            },
+        )
     await journaliser(
         db,
         tenant_id=agent.tenant_id,
@@ -1154,17 +1249,18 @@ async def repondre(
         action="courrier.reponse",
         entite="courriers",
         entite_id=origine.id,
-        payload={"reponse_id": reponse.id},
+        payload={"reponse_id": reponse.id, "redirige": redir.a_redirige},
         ip=ip,
         user_agent=request.headers.get("user-agent"),
     )
     await db.commit()
     await db.refresh(reponse)
 
-    if destinataire_id != agent.id:
+    # Notif au propriétaire effectif (substitut si redirection)
+    if proprietaire_reponse_id != agent.id:
         await notifier_nouveau_courrier(
             courrier_id=reponse.id,
-            agent_destinataire_id=destinataire_id,
+            agent_destinataire_id=proprietaire_reponse_id,
             tenant_id=agent.tenant_id,
         )
 
@@ -1341,6 +1437,32 @@ async def valider(
         tenant_id=agent.tenant_id,
     )
     return courrier
+
+
+# ============================================================================
+# Admin — déclenchement manuel des alertes (en attendant Celery beat)
+# ============================================================================
+
+
+@router.post(
+    "/admin/alertes-retard",
+    summary="Déclencher manuellement le scan d'alertes de retard (superviseur)",
+)
+async def declencher_alertes_retard(
+    superviseur: AgentSuperviseur,  # noqa: ARG001 — sert juste de gate
+) -> dict[str, int]:
+    """Lance immédiatement le scan + envoi des alertes de retard.
+
+    Utile en attendant qu'un cron Celery beat soit déployé en prod.
+    Renvoie un compteur par palier J-5/J-3/J-2/J-1/J0 + total skipped
+    (doublons déjà envoyés).
+
+    Idempotent : la table `alertes_retard_envoyees` empêche les
+    doublons même si on relance plusieurs fois la même journée.
+    """
+    from app.tasks.alertes_retard import envoyer_alertes_quotidiennes
+
+    return await envoyer_alertes_quotidiennes()
 
 
 @router.delete("/{courrier_id}", response_model=CourrierLecture)

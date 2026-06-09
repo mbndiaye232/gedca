@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -14,10 +16,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[
-        # TODO: ajouter au fur et à mesure
-        # "app.tasks.ingestion",
-        # "app.tasks.alerts",
-        # "app.tasks.imap",
+        "app.worker",  # registered tasks live here for now
     ],
 )
 
@@ -33,15 +32,22 @@ celery_app.conf.update(
 )
 
 # Cron des jobs planifiés (Celery Beat)
+# Lancement : celery -A app.worker beat --loglevel=info
 celery_app.conf.beat_schedule = {
-    # Alertes retard quotidiennes — chaque matin à 7h UTC
-    # "alertes-retard-quotidiennes": {
-    #     "task": "app.tasks.alerts.envoyer_alertes_retard",
-    #     "schedule": crontab(hour=7, minute=0),
-    # },
-    # Polling IMAP toutes les 10 minutes
-    # "polling-imap": {
-    #     "task": "app.tasks.imap.recuperer_pieces_jointes",
-    #     "schedule": crontab(minute="*/10"),
-    # },
+    "alertes-retard-quotidiennes": {
+        "task": "app.worker.task_alertes_retard_quotidiennes",
+        "schedule": crontab(hour=7, minute=0),
+    },
 }
+
+
+@celery_app.task(name="app.worker.task_alertes_retard_quotidiennes")
+def task_alertes_retard_quotidiennes() -> dict[str, int]:
+    """Wrapper Celery pour la fonction async `envoyer_alertes_quotidiennes`.
+
+    Import tardif pour éviter le coût du graphe SQLAlchemy au boot du
+    worker quand la tâche n'est pas appelée.
+    """
+    from app.tasks.alertes_retard import envoyer_alertes_quotidiennes
+
+    return asyncio.run(envoyer_alertes_quotidiennes())

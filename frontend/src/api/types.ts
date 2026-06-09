@@ -493,3 +493,36 @@ export interface DemanderValidationBody {
   agent_valideur_id: number;
   instruction?: string | null;
 }
+
+
+// ---------------------------------------------------------------------------
+// Redirection (PDF docs/redirection.pdf)
+// ---------------------------------------------------------------------------
+
+/** Mini-profil agent embarqué dans une redirection. */
+export interface AgentMini {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string | null;
+  fonction: string | null;
+}
+
+/** Body de POST /redirections. */
+export interface RedirectionCreation {
+  agent_substitut_id: number;
+}
+
+/** Sortie standard d'une redirection (avec mini-profils). */
+export interface RedirectionDetail {
+  id: number;
+  agent_redirige_id: number;
+  agent_substitut_id: number;
+  cree_at: string;
+  cree_par: number | null;
+  active: boolean;
+  supprime_at: string | null;
+  supprime_par: number | null;
+  agent_redirige: AgentMini | null;
+  agent_substitut: AgentMini | null;
+}
