@@ -11,6 +11,7 @@ from app.api.v1 import (
     courriers,
     departements,
     documents,
+    parametres_smtp,
     redirections,
     referentiels,
     structure,
@@ -28,3 +29,4 @@ api_router.include_router(archivage.router)
 api_router.include_router(correspondants.router)
 api_router.include_router(courriers.router)
 api_router.include_router(redirections.router)
+api_router.include_router(parametres_smtp.router)
