@@ -22,6 +22,23 @@ export interface ReponseConnexion {
   agent: AgentSession;
 }
 
+/**
+ * Vue restreinte d'un agent pour les sélecteurs (imputation, mise en
+ * copie, choix de destinataire). Récupérée via GET /agents/destinataires
+ * — accessible à tout agent connecté, contrairement au GET /agents
+ * complet qui est réservé au superviseur.
+ *
+ * Le backend ne renvoie ici que les agents `actif=true`.
+ */
+export interface AgentDestinataire {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string | null;
+  fonction: string | null;
+  departement_id: number | null;
+}
+
 export interface Agent {
   id: number;
   login: string;

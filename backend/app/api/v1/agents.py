@@ -22,6 +22,7 @@ from app.models import Agent
 from app.schemas.agent import (
     AgentCreation,
     AgentLecture,
+    AgentDestinataireLecture,
     AgentMiseAJour,
     MonProfilMiseAJour,
 )
@@ -95,6 +96,33 @@ async def maj_mon_profil(
         ) from exc
     await db.refresh(agent)
     return agent
+
+
+# ----- Annuaire (tout agent connecté) -----------------------------------------
+
+
+@router.get(
+    "/destinataires",
+    response_model=list[AgentDestinataireLecture],
+    summary="Lister les agents actifs du tenant — annuaire de destinataires",
+)
+async def lister_destinataires(
+    agent: AgentCourant, db: SessionDB
+) -> list[Agent]:
+    """Annuaire restreint des agents actifs, accessible à tout agent connecté.
+
+    Cas d'usage : sélecteurs d'imputation, de mise en copie, choix d'un
+    destinataire de courrier. Renvoie uniquement les champs nécessaires
+    à l'affichage (pas d'infos sensibles).
+
+    Le /agents racine reste réservé au superviseur pour la gestion RH.
+    """
+    result = await db.execute(
+        select(Agent)
+        .where(Agent.tenant_id == agent.tenant_id, Agent.actif.is_(True))
+        .order_by(Agent.nom, Agent.prenom)
+    )
+    return list(result.scalars())
 
 
 # ----- Routes superviseur -----------------------------------------------------

@@ -1,5 +1,11 @@
 import { api } from './client';
-import type { Agent, AgentCreation, AgentMiseAJour, MonProfilMiseAJour } from './types';
+import type {
+  Agent,
+  AgentCreation,
+  AgentDestinataire,
+  AgentMiseAJour,
+  MonProfilMiseAJour,
+} from './types';
 
 export async function lireMonProfil(): Promise<Agent> {
   const { data } = await api.get<Agent>('/agents/me');
@@ -13,6 +19,19 @@ export async function majMonProfil(body: MonProfilMiseAJour): Promise<Agent> {
 
 export async function listerAgents(): Promise<Agent[]> {
   const { data } = await api.get<Agent[]>('/agents');
+  return data;
+}
+
+/**
+ * Annuaire des agents actifs accessible à tout agent connecté.
+ *
+ * À utiliser dans les sélecteurs (imputation, mise en copie, choix d'un
+ * destinataire de courrier). Le `listerAgents` ci-dessus reste réservé à
+ * la page d'administration RH (superviseur uniquement) et renvoie 403 aux
+ * autres rôles.
+ */
+export async function listerAgentsDestinataires(): Promise<AgentDestinataire[]> {
+  const { data } = await api.get<AgentDestinataire[]>('/agents/destinataires');
   return data;
 }
 

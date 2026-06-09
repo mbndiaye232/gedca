@@ -28,7 +28,7 @@ import {
   lireCourrier,
   repondre,
 } from '@/api/courriers';
-import { listerAgents } from '@/api/agents';
+import { listerAgentsDestinataires } from '@/api/agents';
 import { listerCategories } from '@/api/referentiels';
 import { lireDocument, telechargerContenu } from '@/api/documents';
 import type {
@@ -474,16 +474,20 @@ function ModalCopie({
   onFermer: () => void;
   onSucces: () => void;
 }) {
-  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: listerAgents });
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents', 'destinataires'],
+    queryFn: listerAgentsDestinataires,
+  });
   const [selectionnes, setSelectionnes] = useState<number[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
 
-  // Exclure le propriétaire et les déjà-en-copie
+  // Exclure le propriétaire et les déjà-en-copie (le backend ne renvoie
+  // déjà que les agents actifs).
   const idsExclus = new Set([
     courrier.agent_proprietaire_id,
     ...courrier.copies.map((c) => c.id),
   ]);
-  const disponibles = agents.filter((a) => !idsExclus.has(a.id) && a.actif);
+  const disponibles = agents.filter((a) => !idsExclus.has(a.id));
 
   const mutation = useMutation({
     mutationFn: () => faireUneCopie(courrier.id, selectionnes),
@@ -559,13 +563,17 @@ function ModalImputer({
   onFermer: () => void;
   onSucces: () => void;
 }) {
-  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: listerAgents });
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents', 'destinataires'],
+    queryFn: listerAgentsDestinataires,
+  });
   const [agentId, setAgentId] = useState<string>('');
   const [instruction, setInstruction] = useState('');
   const [erreur, setErreur] = useState<string | null>(null);
 
+  // Exclure le propriétaire (le backend ne renvoie déjà que les agents actifs)
   const disponibles = agents.filter(
-    (a) => a.id !== courrier.agent_proprietaire_id && a.actif,
+    (a) => a.id !== courrier.agent_proprietaire_id,
   );
 
   const mutation = useMutation({
