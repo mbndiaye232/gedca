@@ -29,6 +29,25 @@ class AgentLecture(BaseModel):
     created_at: datetime
 
 
+class AgentDestinataireLecture(BaseModel):
+    """Vue restreinte d'un agent — utilisée par les sélecteurs (imputation,
+    mise en copie, choix d'un destinataire de courrier).
+
+    Pas d'infos sensibles (mot de passe, dernière connexion, etc.).
+    Accessible à tout agent connecté, contrairement à AgentLecture qui
+    est réservée au superviseur.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nom: str
+    prenom: str
+    email: str | None
+    fonction: str | None
+    departement_id: int | None
+
+
 class AgentCreation(BaseModel):
     """Body de POST /api/agents (superviseur)."""
 

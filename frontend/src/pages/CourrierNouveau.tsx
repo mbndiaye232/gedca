@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { creerCourrier } from '@/api/courriers';
-import { listerAgents } from '@/api/agents';
+import { listerAgentsDestinataires } from '@/api/agents';
 import { listerDepartements } from '@/api/departements';
 import { listerCategories, creerCategorie } from '@/api/referentiels';
 import { creerCorrespondant, listerCorrespondants } from '@/api/correspondants';
@@ -63,7 +63,10 @@ export default function CourrierNouveau() {
   const [modalCorrespondant, setModalCorrespondant] = useState(false);
   const [modalCategorieDoc, setModalCategorieDoc] = useState(false);
 
-  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: listerAgents });
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents', 'destinataires'],
+    queryFn: listerAgentsDestinataires,
+  });
   const { data: departements = [] } = useQuery({
     queryKey: ['departements'],
     queryFn: listerDepartements,
@@ -78,9 +81,11 @@ export default function CourrierNouveau() {
     enabled: sens !== 'interne',
   });
 
+  // Le backend ne renvoie déjà que les agents actifs ; on garde juste la
+  // cascade département → liste filtrée.
   const agentsFiltres = departementId
-    ? agents.filter((a) => a.departement_id === Number(departementId) && a.actif)
-    : agents.filter((a) => a.actif);
+    ? agents.filter((a) => a.departement_id === Number(departementId))
+    : agents;
 
   const upload = useMutation({
     mutationFn: async () => {
