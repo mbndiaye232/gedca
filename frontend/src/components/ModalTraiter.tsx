@@ -22,11 +22,13 @@ import {
 import {
   ajouterNote,
   ajouterPiece,
+  demanderValidation,
   envoyer,
   faireUneCopie,
   imputer,
   lireCourrier,
   repondre,
+  validerCourrier,
 } from '@/api/courriers';
 import { listerAgentsDestinataires } from '@/api/agents';
 import { listerCategories } from '@/api/referentiels';
@@ -75,14 +77,36 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
   });
 
   const [actionEnCours, setActionEnCours] = useState<
-    'copie' | 'imputer' | 'note' | 'document' | 'repondre' | null
+    'copie' | 'imputer' | 'note' | 'document' | 'repondre' | 'demander_validation' | null
   >(null);
   const [docPourVisionneuse, setDocPourVisionneuse] = useState<Document | null>(null);
 
+  // Mutation Valider — pas besoin de sous-modal, juste un clic
+  const validation = useMutation({
+    mutationFn: () => validerCourrier(courrierId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['courriers'] });
+    },
+    onError: (err) => alert(extraireMessageErreur(err)),
+  });
+
   if (!agentCourant) return null;
 
-  const traite = courrier?.statut.code === 'traite';
+  // États dérivés du statut courant (PRD-06A + PRD-06B)
+  const codeStatut = courrier?.statut.code;
+  const traite = codeStatut === 'traite';
   const proprietaire = courrier?.agent_proprietaire_id === agentCourant.id;
+  // PRD-06B — flags du workflow validation
+  const enFaireValider = codeStatut === 'a_faire_valider' && proprietaire;
+  const enValidation = codeStatut === 'en_validation';
+  const valide = codeStatut === 'valide' && proprietaire;
+  const aValiderParMoi =
+    enValidation && courrier?.agent_valideur_id === agentCourant.id;
+  // Envoyer reste possible si statut = a_traiter ou valide ; bloqué si
+  // workflow en cours (a_faire_valider, en_validation) — règle PDF p. 10
+  const envoiBloque =
+    codeStatut === 'a_faire_valider' || codeStatut === 'en_validation';
+  const peutEnvoyer = proprietaire && (codeStatut === 'a_traiter' || valide);
   const peutTraiter = !traite && courrier !== undefined;
 
   function invalidate() {
@@ -159,9 +183,42 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
               <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('note')}>
                 <StickyNote className="h-4 w-4" /> Ajouter une note
               </Button>
-              {proprietaire && (
+              {/* PRD-06B — workflow validation */}
+              {enFaireValider && (
+                <Button
+                  variante="secondaire"
+                  taille="sm"
+                  onClick={() => setActionEnCours('demander_validation')}
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Demander une validation
+                </Button>
+              )}
+              {aValiderParMoi && (
+                <Button
+                  taille="sm"
+                  chargement={validation.isPending}
+                  onClick={() => validation.mutate()}
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Valider
+                </Button>
+              )}
+              {peutEnvoyer && (
                 <Button taille="sm" onClick={() => doEnvoyer(courrier.id, invalidate, onFermer)}>
                   <Send className="h-4 w-4" /> Envoyer (clôturer)
+                </Button>
+              )}
+              {/* Tooltip explicatif si l'envoi est bloqué par le workflow */}
+              {proprietaire && envoiBloque && (
+                <Button
+                  taille="sm"
+                  disabled
+                  title={
+                    enFaireValider
+                      ? 'Demande la validation à un agent avant de pouvoir envoyer.'
+                      : 'Le valideur n\'a pas encore accordé sa validation.'
+                  }
+                >
+                  <Send className="h-4 w-4" /> Envoyer (en attente de validation)
                 </Button>
               )}
             </div>
@@ -261,6 +318,16 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
             setActionEnCours(null);
             invalidate();
             onFermer();
+          }}
+        />
+      )}
+      {courrier && actionEnCours === 'demander_validation' && (
+        <ModalDemanderValidation
+          courrier={courrier}
+          onFermer={() => setActionEnCours(null)}
+          onSucces={() => {
+            setActionEnCours(null);
+            invalidate();
           }}
         />
       )}
@@ -789,6 +856,10 @@ function ModalRepondre({
   const [categorieId, setCategorieId] = useState<string>(
     courrier.categorie_id ? String(courrier.categorie_id) : '',
   );
+  // PRD-06B : si coché, la réponse arrive en statut a_faire_valider
+  // chez le destinataire (typiquement le supérieur), qui devra demander
+  // la validation à un agent avant l'envoi.
+  const [aFaireValider, setAFaireValider] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -800,6 +871,7 @@ function ModalRepondre({
         // si je suis le propriétaire d'origine).
         document_titre: fichier?.name.replace(/\.[^.]+$/, '') || 'Réponse',
         document_categorie_id: Number(categorieId),
+        a_faire_valider: aFaireValider,
       };
       return repondre(courrier.id, fichier!, body);
     },
@@ -849,6 +921,24 @@ function ModalRepondre({
             invite="Glisse ici le PDF / Word de ta réponse"
           />
         </div>
+        {/* PRD-06B : workflow validation */}
+        <label className="flex items-start gap-3 cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            checked={aFaireValider}
+            onChange={(e) => setAFaireValider(e.target.checked)}
+            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 mt-0.5"
+          />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-slate-900">
+              À faire valider avant l'envoi
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              La réponse arrivera dans la corbeille « À faire valider » du
+              destinataire (au lieu d'« À traiter »).
+            </p>
+          </div>
+        </label>
         {erreur && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {erreur}
@@ -864,6 +954,109 @@ function ModalRepondre({
             chargement={mutation.isPending}
           >
             Envoyer la réponse
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ModalDemanderValidation (PRD-06B)
+// ---------------------------------------------------------------------------
+// Affichée quand l'utilisateur clique "Demander une validation" sur un
+// courrier en statut a_faire_valider. Permet de choisir un agent valideur
+// (un seul) et d'ajouter une instruction optionnelle.
+function ModalDemanderValidation({
+  courrier,
+  onFermer,
+  onSucces,
+}: {
+  courrier: CourrierDetail;
+  onFermer: () => void;
+  onSucces: () => void;
+}) {
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents', 'destinataires'],
+    queryFn: listerAgentsDestinataires,
+  });
+  const [agentId, setAgentId] = useState<string>('');
+  const [instruction, setInstruction] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  // Exclure moi-même : on ne peut pas se désigner comme valideur de
+  // son propre courrier. Le backend filtre déjà les agents inactifs.
+  const disponibles = agents.filter(
+    (a) => a.id !== courrier.agent_proprietaire_id,
+  );
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      demanderValidation(courrier.id, {
+        agent_valideur_id: Number(agentId),
+        instruction: instruction.trim() || null,
+      }),
+    onSuccess: onSucces,
+    onError: (err) => setErreur(extraireMessageErreur(err)),
+  });
+
+  return (
+    <Modal ouvert onFermer={onFermer} titre="Demander une validation" largeur="sm">
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          setErreur(null);
+          mutation.mutate();
+        }}
+        className="space-y-4"
+      >
+        <div className="rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-xs text-sky-900">
+          Le courrier passera dans la corbeille <strong>« En validation »</strong>{' '}
+          de ton côté et apparaîtra dans la corbeille <strong>« À valider »</strong>{' '}
+          du valideur. Tu ne pourras pas l'envoyer tant qu'il n'aura pas validé.
+        </div>
+        <Select
+          label="Valideur *"
+          value={agentId}
+          onChange={(e) => setAgentId(e.target.value)}
+          required
+        >
+          <option value="">— choisir —</option>
+          {disponibles.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.prenom} {a.nom}
+              {a.fonction ? ` — ${a.fonction}` : ''}
+            </option>
+          ))}
+        </Select>
+        <div>
+          <label className="block text-xs font-medium text-slate-700 tracking-wide mb-1.5">
+            Instruction (optionnel)
+          </label>
+          <textarea
+            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            rows={3}
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            placeholder="Message pour le valideur"
+            maxLength={1000}
+          />
+        </div>
+        {erreur && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            {erreur}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <Button type="button" variante="secondaire" onClick={onFermer}>
+            Annuler
+          </Button>
+          <Button
+            type="submit"
+            disabled={!agentId}
+            chargement={mutation.isPending}
+          >
+            Envoyer la demande
           </Button>
         </div>
       </form>

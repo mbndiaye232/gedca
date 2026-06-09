@@ -63,6 +63,7 @@ from app.schemas.courrier import (
     CourrierCreation,
     CourrierDetail,
     CourrierLecture,
+    DemanderValidationBody,
     HistoriqueLecture,
     ImputerBody,
     NoteCreation,
@@ -70,7 +71,11 @@ from app.schemas.courrier import (
     RepondreBody,
 )
 from app.services.audit import journaliser
-from app.services.notifications import notifier_nouveau_courrier
+from app.services.notifications import (
+    notifier_courrier_valide,
+    notifier_demande_validation,
+    notifier_nouveau_courrier,
+)
 from app.services.numerotation_courrier import prochain_numero_enregistrement
 from app.services.storage import stocker
 
@@ -84,11 +89,17 @@ router = APIRouter(prefix="/courriers", tags=["courriers"])
 # ============================================================================
 
 
-# Codes des statuts seedés en 06A (cf. migration 005)
+# Codes des statuts seedés (migrations 005 + 006)
 STATUT_A_TRAITER = 1
 STATUT_TRAITE = 2
+STATUT_A_FAIRE_VALIDER = 3   # PRD-06B
+STATUT_EN_VALIDATION = 4     # PRD-06B
+STATUT_VALIDE = 5            # PRD-06B — étape intermédiaire avant envoi
 
-# Codes des actions seedées en 06A (cf. migration 005)
+# Statuts qui bloquent l'envoi (workflow validation en cours)
+STATUTS_BLOQUANT_ENVOI = (STATUT_A_FAIRE_VALIDER, STATUT_EN_VALIDATION)
+
+# Codes des actions seedées (migrations 005 + 006)
 ACTION_CREATION = 1
 ACTION_COPIE = 2
 ACTION_IMPUTATION = 3
@@ -96,6 +107,8 @@ ACTION_REPONSE = 4
 ACTION_ENVOI = 5
 ACTION_NOTE = 6
 ACTION_AJOUT_DOCUMENT = 7
+ACTION_DEMANDE_VALIDATION = 8  # PRD-06B
+ACTION_VALIDATION = 9          # PRD-06B
 
 
 async def _charger_courrier(
@@ -203,13 +216,17 @@ async def compteurs_corbeilles(
         )
     )
 
-    # En retard : statut != traite ET date_limite < today
-    # ET (propriétaire = moi OU en copie)
+    # En retard : statut "ouvert" (en traitement / à faire valider / en
+    # validation) ET date_limite < today ET (propriétaire = moi OU en copie).
+    # PDF Corbeilles p. 8 : "Il peut s'agir de courrier en traitement, a
+    # faire valider, en validation". Les statuts `valide` et `traite`
+    # sortent donc des retards.
+    STATUTS_EN_RETARD = (STATUT_A_TRAITER, STATUT_A_FAIRE_VALIDER, STATUT_EN_VALIDATION)
     en_retard_proprio = await db.scalar(
         select(func.count(Courrier.id)).where(
             Courrier.tenant_id == agent.tenant_id,
             Courrier.supprime.is_(False),
-            Courrier.statut_id != STATUT_TRAITE,
+            Courrier.statut_id.in_(STATUTS_EN_RETARD),
             Courrier.date_limite.is_not(None),
             Courrier.date_limite < aujourd_hui,
             Courrier.agent_proprietaire_id == agent.id,
@@ -222,25 +239,63 @@ async def compteurs_corbeilles(
             CopieCourrier.agent_id == agent.id,
             Courrier.tenant_id == agent.tenant_id,
             Courrier.supprime.is_(False),
-            Courrier.statut_id != STATUT_TRAITE,
+            Courrier.statut_id.in_(STATUTS_EN_RETARD),
             Courrier.date_limite.is_not(None),
             Courrier.date_limite < aujourd_hui,
         )
     )
     en_retard = int(en_retard_proprio or 0) + int(en_retard_copie or 0)
 
+    # PRD-06B — 4 corbeilles du workflow de validation
+    # À valider : je suis le valideur désigné, le courrier attend ma décision
+    a_valider = await db.scalar(
+        select(func.count(Courrier.id)).where(
+            Courrier.tenant_id == agent.tenant_id,
+            Courrier.supprime.is_(False),
+            Courrier.statut_id == STATUT_EN_VALIDATION,
+            Courrier.agent_valideur_id == agent.id,
+        )
+    )
+    # Validés : mes courriers qui ont été validés et que je peux envoyer
+    valides = await db.scalar(
+        select(func.count(Courrier.id)).where(
+            Courrier.tenant_id == agent.tenant_id,
+            Courrier.supprime.is_(False),
+            Courrier.statut_id == STATUT_VALIDE,
+            Courrier.agent_proprietaire_id == agent.id,
+        )
+    )
+    # À faire valider : mes courriers pour lesquels je dois demander la validation
+    a_faire_valider = await db.scalar(
+        select(func.count(Courrier.id)).where(
+            Courrier.tenant_id == agent.tenant_id,
+            Courrier.supprime.is_(False),
+            Courrier.statut_id == STATUT_A_FAIRE_VALIDER,
+            Courrier.agent_proprietaire_id == agent.id,
+        )
+    )
+    # En validation : mes courriers déjà envoyés en validation, en attente
+    en_validation = await db.scalar(
+        select(func.count(Courrier.id)).where(
+            Courrier.tenant_id == agent.tenant_id,
+            Courrier.supprime.is_(False),
+            Courrier.statut_id == STATUT_EN_VALIDATION,
+            Courrier.agent_proprietaire_id == agent.id,
+        )
+    )
+
     corbeilles = [
         CompteurCorbeille(code="a_traiter", libelle="À traiter", compteur=int(a_traiter or 0)),
         CompteurCorbeille(code="traite", libelle="Traités", compteur=int(traite or 0)),
         CompteurCorbeille(code="en_copie", libelle="En copie", compteur=int(en_copie or 0)),
         CompteurCorbeille(code="en_retard", libelle="En retard", compteur=en_retard),
-        CompteurCorbeille(code="a_valider", libelle="À valider", compteur=0, actif_en_06a=False),
-        CompteurCorbeille(code="valides", libelle="Validés", compteur=0, actif_en_06a=False),
+        CompteurCorbeille(code="a_valider", libelle="À valider", compteur=int(a_valider or 0)),
+        CompteurCorbeille(code="valides", libelle="Validés", compteur=int(valides or 0)),
         CompteurCorbeille(
-            code="a_faire_valider", libelle="À faire valider", compteur=0, actif_en_06a=False
+            code="a_faire_valider", libelle="À faire valider", compteur=int(a_faire_valider or 0)
         ),
         CompteurCorbeille(
-            code="en_validation", libelle="En validation", compteur=0, actif_en_06a=False
+            code="en_validation", libelle="En validation", compteur=int(en_validation or 0)
         ),
     ]
     return CompteursCorbeilles(corbeilles=corbeilles)
@@ -278,8 +333,11 @@ def _appliquer_filtre_corbeille(
         sous_copie = select(CopieCourrier.courrier_id).where(
             CopieCourrier.agent_id == agent_id
         )
+        # Aligné sur le compteur : exclut traite et valide (cf. PDF p. 8)
         return base.where(
-            Courrier.statut_id != STATUT_TRAITE,
+            Courrier.statut_id.in_(
+                (STATUT_A_TRAITER, STATUT_A_FAIRE_VALIDER, STATUT_EN_VALIDATION)
+            ),
             Courrier.date_limite.is_not(None),
             Courrier.date_limite < aujourd_hui,
             or_(
@@ -287,7 +345,28 @@ def _appliquer_filtre_corbeille(
                 Courrier.id.in_(sous_copie),
             ),
         )
-    # Corbeilles 5-8 : différées à 06B, on retourne 0 résultat
+    # PRD-06B — workflow validation
+    if corbeille == "a_valider":
+        return base.where(
+            Courrier.statut_id == STATUT_EN_VALIDATION,
+            Courrier.agent_valideur_id == agent_id,
+        )
+    if corbeille == "valides":
+        return base.where(
+            Courrier.statut_id == STATUT_VALIDE,
+            Courrier.agent_proprietaire_id == agent_id,
+        )
+    if corbeille == "a_faire_valider":
+        return base.where(
+            Courrier.statut_id == STATUT_A_FAIRE_VALIDER,
+            Courrier.agent_proprietaire_id == agent_id,
+        )
+    if corbeille == "en_validation":
+        return base.where(
+            Courrier.statut_id == STATUT_EN_VALIDATION,
+            Courrier.agent_proprietaire_id == agent_id,
+        )
+    # Code de corbeille inconnu → on retourne 0 résultat
     return base.where(False)  # type: ignore[arg-type]
 
 
@@ -500,7 +579,12 @@ async def creer(
         departement_destinataire_id=body.departement_destinataire_id,
         agent_destinataire_id=body.agent_destinataire_id,
         document_principal_id=document.id,
-        statut_id=STATUT_A_TRAITER,
+        # PRD-06B : si l'utilisateur a coché "À faire valider", le courrier
+        # entre directement dans le workflow de validation au lieu de la
+        # corbeille "À traiter".
+        statut_id=(
+            STATUT_A_FAIRE_VALIDER if body.a_faire_valider else STATUT_A_TRAITER
+        ),
         agent_proprietaire_id=body.agent_destinataire_id,
         created_by=agent.id,
     )
@@ -753,6 +837,18 @@ async def envoyer(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Courrier déjà clôturé.",
+        )
+    # PRD-06B : impossible d'envoyer tant que le workflow de validation
+    # n'a pas abouti. Le PDF Corbeilles (p. 10) précise :
+    # "tant que la validation n'aura pas eu lieu, il ne pourra pas l'envoyer".
+    if courrier.statut_id in STATUTS_BLOQUANT_ENVOI:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Ce courrier doit être validé avant d'être envoyé. "
+                "Utilise « Demander une validation » puis attends le retour "
+                "du valideur."
+            ),
         )
     courrier.statut_id = STATUT_TRAITE
     await _ajouter_historique(db, courrier.id, agent.id, ACTION_ENVOI)
@@ -1015,7 +1111,12 @@ async def repondre(
         departement_destinataire_id=body.departement_destinataire_id,
         agent_destinataire_id=destinataire_id,
         document_principal_id=document.id,
-        statut_id=STATUT_A_TRAITER,
+        # PRD-06B : si le rédacteur a coché "À faire valider", la réponse
+        # n'arrive PAS en "À traiter" mais directement dans le workflow
+        # validation chez son destinataire (typiquement son supérieur).
+        statut_id=(
+            STATUT_A_FAIRE_VALIDER if body.a_faire_valider else STATUT_A_TRAITER
+        ),
         agent_proprietaire_id=destinataire_id,
         courrier_origine_id=origine.id,
         created_by=agent.id,
@@ -1056,6 +1157,178 @@ async def repondre(
         )
 
     return reponse
+
+
+# ============================================================================
+# Workflow de validation (PRD-06B)
+# ============================================================================
+
+
+@router.post(
+    "/{courrier_id}/demander-validation",
+    response_model=CourrierLecture,
+    summary="Demander à un agent de valider un courrier (workflow PRD-06B)",
+)
+async def demander_validation(
+    courrier_id: int,
+    body: DemanderValidationBody,
+    agent: AgentCourant,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Courrier:
+    """Transmet le courrier au valideur choisi.
+
+    Préconditions :
+    - Je suis le propriétaire actuel
+    - Le courrier est en statut `a_faire_valider`
+
+    Effet : statut → `en_validation`, `agent_valideur_id` rempli. Le
+    courrier sort de ma corbeille « À faire valider » → ma corbeille
+    « En validation », et apparaît dans la corbeille « À valider » du
+    valideur.
+    """
+    courrier = await _charger_courrier(db, courrier_id, agent.tenant_id)
+
+    if courrier.agent_proprietaire_id != agent.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seul le propriétaire peut demander une validation.",
+        )
+    if courrier.statut_id != STATUT_A_FAIRE_VALIDER:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Ce courrier n'est pas en statut « À faire valider ». "
+                "Vérifie que la case « À faire valider » a bien été cochée "
+                "à la création ou à la réponse."
+            ),
+        )
+
+    # Vérifier l'agent valideur
+    if body.agent_valideur_id == agent.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tu ne peux pas te désigner toi-même comme valideur.",
+        )
+    valideur = await db.scalar(
+        select(Agent).where(
+            Agent.id == body.agent_valideur_id,
+            Agent.tenant_id == agent.tenant_id,
+            Agent.actif.is_(True),
+        )
+    )
+    if valideur is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent valideur introuvable ou désactivé.",
+        )
+
+    courrier.agent_valideur_id = body.agent_valideur_id
+    courrier.statut_id = STATUT_EN_VALIDATION
+
+    await _ajouter_historique(
+        db,
+        courrier.id,
+        agent.id,
+        ACTION_DEMANDE_VALIDATION,
+        {
+            "agent_valideur_id": body.agent_valideur_id,
+            "instruction": body.instruction,
+        },
+    )
+    await journaliser(
+        db,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        action="courrier.demande_validation",
+        entite="courriers",
+        entite_id=courrier.id,
+        payload={"agent_valideur_id": body.agent_valideur_id},
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(courrier)
+
+    # Notif fire-and-forget au valideur désigné
+    await notifier_demande_validation(
+        courrier_id=courrier.id,
+        agent_valideur_id=body.agent_valideur_id,
+        agent_demandeur_id=agent.id,
+        tenant_id=agent.tenant_id,
+        instruction=body.instruction,
+    )
+    return courrier
+
+
+@router.post(
+    "/{courrier_id}/valider",
+    response_model=CourrierLecture,
+    summary="Valider un courrier qu'on a reçu en demande de validation (PRD-06B)",
+)
+async def valider(
+    courrier_id: int,
+    agent: AgentCourant,
+    db: SessionDB,
+    request: Request,
+    ip: IpClient,
+) -> Courrier:
+    """Valide un courrier dont on est l'agent valideur désigné.
+
+    Préconditions :
+    - Le courrier est en statut `en_validation`
+    - Je suis l'agent valideur (`courrier.agent_valideur_id == moi`)
+
+    Effet : statut → `valide`. Le courrier sort de ma corbeille
+    « À valider » et apparaît dans la corbeille « Validés » du demandeur,
+    qui pourra alors l'envoyer.
+    """
+    courrier = await _charger_courrier(db, courrier_id, agent.tenant_id)
+
+    if courrier.statut_id != STATUT_EN_VALIDATION:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce courrier n'est pas en attente de validation.",
+        )
+    if courrier.agent_valideur_id != agent.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu n'es pas le valideur désigné pour ce courrier.",
+        )
+
+    courrier.statut_id = STATUT_VALIDE
+    # On conserve `agent_valideur_id` pour mémoriser qui a validé.
+
+    await _ajouter_historique(
+        db,
+        courrier.id,
+        agent.id,
+        ACTION_VALIDATION,
+        {"agent_demandeur_id": courrier.agent_proprietaire_id},
+    )
+    await journaliser(
+        db,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        action="courrier.validation",
+        entite="courriers",
+        entite_id=courrier.id,
+        ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(courrier)
+
+    # Notif fire-and-forget au demandeur (le proprio actuel = celui qui
+    # a demandé la validation et attend le retour)
+    await notifier_courrier_valide(
+        courrier_id=courrier.id,
+        agent_demandeur_id=courrier.agent_proprietaire_id,
+        agent_valideur_id=agent.id,
+        tenant_id=agent.tenant_id,
+    )
+    return courrier
 
 
 @router.delete("/{courrier_id}", response_model=CourrierLecture)

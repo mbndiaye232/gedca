@@ -24,9 +24,9 @@ export interface ReponseConnexion {
 
 /**
  * Vue restreinte d'un agent pour les sélecteurs (imputation, mise en
- * copie, choix de destinataire). Récupérée via GET /agents/destinataires
- * — accessible à tout agent connecté, contrairement au GET /agents
- * complet qui est réservé au superviseur.
+ * copie, choix de destinataire ou de valideur). Récupérée via
+ * GET /agents/destinataires — accessible à tout agent connecté,
+ * contrairement au GET /agents complet qui est réservé au superviseur.
  *
  * Le backend ne renvoie ici que les agents `actif=true`.
  */
@@ -425,6 +425,12 @@ export interface Courrier {
   document_principal_id: number;
   statut: StatutCourrierLecture;
   courrier_origine_id: number | null;
+  /**
+   * PRD-06B — agent désigné pour valider ce courrier.
+   * `null` tant qu'aucune demande de validation n'a été envoyée.
+   * Reste rempli après la validation (info historique).
+   */
+  agent_valideur_id: number | null;
   created_at: string;
   created_by: number | null;
   updated_at: string;
@@ -452,6 +458,12 @@ export interface CourrierCreationBody {
   agent_destinataire_id: number;
   document_titre: string;
   document_categorie_id: number;
+  /**
+   * PRD-06B — si `true`, le courrier arrive en statut `a_faire_valider`
+   * au lieu de `a_traiter`. Le propriétaire devra ensuite cliquer
+   * « Demander une validation » pour choisir le valideur.
+   */
+  a_faire_valider?: boolean;
 }
 
 export interface RepondreBody {
@@ -467,4 +479,17 @@ export interface RepondreBody {
   departement_destinataire_id?: number | null;
   document_titre: string;
   document_categorie_id: number;
+  /**
+   * PRD-06B — si `true`, la réponse arrive en statut `a_faire_valider`
+   * chez son destinataire (typiquement le supérieur), au lieu de
+   * `a_traiter`. Le destinataire devra demander la validation à
+   * quelqu'un avant l'envoi.
+   */
+  a_faire_valider?: boolean;
+}
+
+/** Body de POST /courriers/{id}/demander-validation (PRD-06B). */
+export interface DemanderValidationBody {
+  agent_valideur_id: number;
+  instruction?: string | null;
 }

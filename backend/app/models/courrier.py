@@ -134,6 +134,14 @@ class Courrier(Base):
         BigInteger, ForeignKey("courriers.id", ondelete="SET NULL")
     )
 
+    # PRD-06B : workflow de validation
+    # - NULL tant qu'aucune demande de validation n'a été émise
+    # - Rempli au moment de "Demander une validation" (qui doit valider)
+    # - Reste rempli après "Valider" (info historique)
+    agent_valideur_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("agents.id", ondelete="RESTRICT")
+    )
+
     supprime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
