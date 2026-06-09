@@ -11,7 +11,7 @@
   }
 
   html {
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -21,12 +21,12 @@
     @apply font-sans bg-slate-50 text-slate-900 antialiased;
   }
 
-  /* Sélection */
+  /* Sélection — teinte marine de la marque */
   ::selection {
-    @apply bg-brand-200 text-brand-900;
+    @apply bg-brand-200 text-brand-950;
   }
 
-  /* Scrollbars discrètes */
+  /* Scrollbars discrètes, légèrement teintées marine */
   ::-webkit-scrollbar {
     @apply w-2 h-2;
   }
@@ -34,40 +34,65 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-300 rounded-full;
+    @apply bg-brand-200 rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-400;
+    @apply bg-brand-400;
   }
 
   /* Focus ring uniforme */
   :focus-visible {
     @apply outline-none;
   }
+
+  /* Titres : légèrement plus serrés que la valeur par défaut Inter */
+  h1, h2, h3, h4 {
+    letter-spacing: -0.018em;
+  }
 }
 
 @layer components {
   /* Effet "ring brand" réutilisable */
   .ring-brand {
-    @apply ring-2 ring-brand-500 ring-offset-2;
+    @apply ring-2 ring-brand-600 ring-offset-2;
   }
 
   /* Pastille statut */
   .dot {
     @apply inline-block h-2 w-2 rounded-full;
   }
+
+  /* Carte "premium" — ombre douce mais profonde, bord interne lumineux */
+  .card-premium {
+    @apply bg-white rounded-2xl shadow-premium ring-1 ring-slate-200/60;
+    background-image: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  }
 }
 
 @layer utilities {
-  /* Texte gradient (titres premium) */
+  /* Texte gradient marine — titres premium */
   .text-gradient-brand {
-    background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+    background: linear-gradient(135deg, #1a2236 0%, #4d6f9c 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
-  /* Effet shimmer (skeleton) */
+  /* Texte gradient par module (rare, pour titres de sections « hero ») */
+  .text-gradient-docs {
+    background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .text-gradient-courriers {
+    background: linear-gradient(135deg, #bd440f 0%, #f37419 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Effet shimmer (skeleton) — teinte plus chaude */
   .shimmer {
     background: linear-gradient(
       90deg,
@@ -77,5 +102,13 @@
     );
     background-size: 200% 100%;
     @apply animate-shimmer rounded;
+  }
+
+  /* Glassmorphism doux pour éléments flottants */
+  .glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(8px) saturate(160%);
+    -webkit-backdrop-filter: blur(8px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
   }
 }
