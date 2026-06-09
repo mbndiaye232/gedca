@@ -161,68 +161,76 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
             onAjouterPiece={() => setActionEnCours('document')}
           />
 
-          {/* Actions */}
-          {peutTraiter && (
-            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+          {/* Actions
+              Conformité PDF Corbeilles : Notes est une action « à tout
+              instant » (p. 10) — disponible y compris sur un courrier
+              clôturé et pour les agents en copie. Les autres actions
+              (transformantes) ne sont visibles que si le courrier est
+              encore ouvert (`peutTraiter`). */}
+          <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+            {peutTraiter && (
               <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('copie')}>
                 <CopyIcon className="h-4 w-4" /> Faire une copie
               </Button>
-              {proprietaire && (
-                <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('imputer')}>
-                  <Users className="h-4 w-4" /> Imputer
-                </Button>
-              )}
-              {/* Conformité PRD-06A : seul le propriétaire actuel répond
-                  (les agents en copie peuvent voir, noter, joindre — pas
-                  répondre). PDF Corbeilles p. 9. */}
-              {proprietaire && (
-                <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('repondre')}>
-                  <Reply className="h-4 w-4" /> Répondre
-                </Button>
-              )}
-              <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('note')}>
-                <StickyNote className="h-4 w-4" /> Ajouter une note
+            )}
+            {peutTraiter && proprietaire && (
+              <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('imputer')}>
+                <Users className="h-4 w-4" /> Imputer
               </Button>
-              {/* PRD-06B — workflow validation */}
-              {enFaireValider && (
-                <Button
-                  variante="secondaire"
-                  taille="sm"
-                  onClick={() => setActionEnCours('demander_validation')}
-                >
-                  <CheckCircle2 className="h-4 w-4" /> Demander une validation
-                </Button>
-              )}
-              {aValiderParMoi && (
-                <Button
-                  taille="sm"
-                  chargement={validation.isPending}
-                  onClick={() => validation.mutate()}
-                >
-                  <CheckCircle2 className="h-4 w-4" /> Valider
-                </Button>
-              )}
-              {peutEnvoyer && (
-                <Button taille="sm" onClick={() => doEnvoyer(courrier.id, invalidate, onFermer)}>
-                  <Send className="h-4 w-4" /> Envoyer (clôturer)
-                </Button>
-              )}
-              {/* Tooltip explicatif si l'envoi est bloqué par le workflow */}
-              {proprietaire && envoiBloque && (
-                <Button
-                  taille="sm"
-                  disabled
-                  title={
-                    enFaireValider
-                      ? 'Demande la validation à un agent avant de pouvoir envoyer.'
-                      : 'Le valideur n\'a pas encore accordé sa validation.'
-                  }
-                >
-                  <Send className="h-4 w-4" /> Envoyer (en attente de validation)
-                </Button>
-              )}
-            </div>
-          )}
+            )}
+            {/* Conformité PRD-06A : seul le propriétaire actuel répond
+                (les agents en copie peuvent voir, noter, joindre — pas
+                répondre). PDF Corbeilles p. 9. */}
+            {peutTraiter && proprietaire && (
+              <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('repondre')}>
+                <Reply className="h-4 w-4" /> Répondre
+              </Button>
+            )}
+            {/* Ajouter une note — toujours disponible (PDF p. 10). Les
+                agents en copie peuvent noter, et la note reste possible
+                même après clôture (annotation post-traitement). */}
+            <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('note')}>
+              <StickyNote className="h-4 w-4" /> Ajouter une note
+            </Button>
+            {/* PRD-06B — workflow validation */}
+            {peutTraiter && enFaireValider && (
+              <Button
+                variante="secondaire"
+                taille="sm"
+                onClick={() => setActionEnCours('demander_validation')}
+              >
+                <CheckCircle2 className="h-4 w-4" /> Demander une validation
+              </Button>
+            )}
+            {peutTraiter && aValiderParMoi && (
+              <Button
+                taille="sm"
+                chargement={validation.isPending}
+                onClick={() => validation.mutate()}
+              >
+                <CheckCircle2 className="h-4 w-4" /> Valider
+              </Button>
+            )}
+            {peutTraiter && peutEnvoyer && (
+              <Button taille="sm" onClick={() => doEnvoyer(courrier.id, invalidate, onFermer)}>
+                <Send className="h-4 w-4" /> Envoyer (clôturer)
+              </Button>
+            )}
+            {/* Tooltip explicatif si l'envoi est bloqué par le workflow */}
+            {peutTraiter && proprietaire && envoiBloque && (
+              <Button
+                taille="sm"
+                disabled
+                title={
+                  enFaireValider
+                    ? 'Demande la validation à un agent avant de pouvoir envoyer.'
+                    : 'Le valideur n\'a pas encore accordé sa validation.'
+                }
+              >
+                <Send className="h-4 w-4" /> Envoyer (en attente de validation)
+              </Button>
+            )}
+          </div>
 
           {/* Notes */}
           <CollapsibleSection
