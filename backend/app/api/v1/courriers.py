@@ -926,9 +926,13 @@ async def repondre(
             status_code=status.HTTP_409_CONFLICT,
             detail="Impossible de répondre à un courrier déjà clôturé.",
         )
-    if not await _agent_voit_courrier(db, origine, agent.id):
+    # Conformité PRD-06A : seul le propriétaire actuel répond. Les agents
+    # en copie (y compris un ancien propriétaire qui a imputé) ne peuvent
+    # pas répondre — règle métier du PDF Corbeilles, p. 9.
+    if origine.agent_proprietaire_id != agent.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seul le propriétaire actuel du courrier peut y répondre.",
         )
 
     try:

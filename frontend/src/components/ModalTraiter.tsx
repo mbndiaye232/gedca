@@ -148,9 +148,14 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
                   <Users className="h-4 w-4" /> Imputer
                 </Button>
               )}
-              <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('repondre')}>
-                <Reply className="h-4 w-4" /> Répondre
-              </Button>
+              {/* Conformité PRD-06A : seul le propriétaire actuel répond
+                  (les agents en copie peuvent voir, noter, joindre — pas
+                  répondre). PDF Corbeilles p. 9. */}
+              {proprietaire && (
+                <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('repondre')}>
+                  <Reply className="h-4 w-4" /> Répondre
+                </Button>
+              )}
               <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('note')}>
                 <StickyNote className="h-4 w-4" /> Ajouter une note
               </Button>
