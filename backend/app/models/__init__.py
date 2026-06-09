@@ -27,12 +27,14 @@ from app.models.courrier import (
     StatutCourrier,
 )
 from app.models.document import Document, DocumentVersion
+from app.models.redirection import AlerteRetardEnvoyee, Redirection
 from app.models.referentiel import Categorie, Thematique, TypeDocument
 from app.models.tenant import Tenant
 
 __all__ = [
     "ActionCourrier",
     "Agent",
+    "AlerteRetardEnvoyee",
     "AuditLog",
     "Boite",
     "Categorie",
@@ -50,6 +52,7 @@ __all__ = [
     "LocalSalle",
     "NoteCourrier",
     "Rayon",
+    "Redirection",
     "Role",
     "Site",
     "SousDossier",

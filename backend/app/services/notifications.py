@@ -49,6 +49,49 @@ Connectez-vous à Soft GEDCAP pour le traiter :
 """
 )
 
+# Mise en copie — envoyée à chaque agent nouvellement ajouté en copie
+TEMPLATE_MISE_EN_COPIE = Template(
+    """\
+Bonjour {{ prenom }},
+
+{{ ajouteur_prenom }} {{ ajouteur_nom }} vous a mis en copie d'un courrier.
+
+Numéro : {{ numero }}
+Sens : {{ sens }}
+Objet : {{ objet }}
+{% if date_limite %}Date limite de traitement : {{ date_limite }}{% endif %}
+
+Vous pouvez le consulter depuis la corbeille « En copie » :
+{{ url_gedca }}/courriers/{{ courrier_id }}
+
+— Notification automatique Soft GEDCAP
+"""
+)
+
+# Alerte de retard — envoyée à propriétaire + agents en copie
+TEMPLATE_ALERTE_RETARD = Template(
+    """\
+Bonjour {{ prenom }},
+
+{% if palier == 0 -%}
+La date limite de traitement d'un courrier est atteinte AUJOURD'HUI.
+{%- elif palier == 1 -%}
+La date limite de traitement d'un courrier est DEMAIN.
+{%- else -%}
+La date limite de traitement d'un courrier est dans {{ palier }} jours.
+{%- endif %}
+
+Numéro : {{ numero }}
+Objet : {{ objet }}
+Date limite : {{ date_limite }}
+
+Pour traiter ce courrier :
+{{ url_gedca }}/courriers/{{ courrier_id }}
+
+— Notification automatique Soft GEDCAP
+"""
+)
+
 # PRD-06B — Demande de validation envoyée à l'agent valideur
 TEMPLATE_DEMANDE_VALIDATION = Template(
     """\
@@ -426,6 +469,126 @@ async def notifier_courrier_valide(
             corps=corps,
             courrier_id=courrier_id,
             action_audit="courrier.notif_validation",
+        )
+
+    asyncio.create_task(_envoyer())
+
+
+# ---------------------------------------------------------------------------
+# Mise en copie
+# ---------------------------------------------------------------------------
+
+
+async def notifier_mise_en_copie(
+    courrier_id: int,
+    agent_en_copie_id: int,
+    agent_ajouteur_id: int,
+    tenant_id: int,
+) -> None:
+    """Notifie un agent qu'il vient d'être mis en copie d'un courrier.
+
+    Fire-and-forget. Appelé par POST /courriers/{id}/copies une fois par
+    agent nouvellement ajouté.
+    """
+
+    async def _envoyer() -> None:
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as db:
+            try:
+                en_copie = await db.get(Agent, agent_en_copie_id)
+                ajouteur = await db.get(Agent, agent_ajouteur_id)
+                courrier = await db.get(Courrier, courrier_id)
+                tenant = await db.get(Tenant, tenant_id)
+                if not (en_copie and ajouteur and courrier and tenant):
+                    return
+
+                corps = TEMPLATE_MISE_EN_COPIE.render(
+                    prenom=en_copie.prenom,
+                    ajouteur_prenom=ajouteur.prenom,
+                    ajouteur_nom=ajouteur.nom,
+                    numero=courrier.numero_enregistrement,
+                    sens=courrier.sens,
+                    objet=courrier.objet,
+                    date_limite=courrier.date_limite,
+                    courrier_id=courrier_id,
+                    url_gedca=tenant.smtp_from or "http://localhost:5173",
+                )
+                sujet = (
+                    f"[Soft GEDCAP] Mis en copie — "
+                    f"{courrier.numero_enregistrement}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Préparation notification copie: %s", exc)
+                return
+
+        await _envoyer_email_simple(
+            tenant_id=tenant_id,
+            destinataire_agent_id=agent_en_copie_id,
+            sujet=sujet,
+            corps=corps,
+            courrier_id=courrier_id,
+            action_audit="courrier.notif_copie",
+        )
+
+    asyncio.create_task(_envoyer())
+
+
+# ---------------------------------------------------------------------------
+# Alerte de retard
+# ---------------------------------------------------------------------------
+
+
+async def notifier_alerte_retard(
+    courrier_id: int,
+    agent_id: int,
+    palier: int,
+    tenant_id: int,
+) -> None:
+    """Notifie un agent qu'un de ses courriers approche de la date limite.
+
+    `palier` ∈ {5, 3, 2, 1, 0} — jours restants. Fire-and-forget.
+    L'anti-doublon est géré par le caller (table `alertes_retard_envoyees`).
+    """
+
+    async def _envoyer() -> None:
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as db:
+            try:
+                cible = await db.get(Agent, agent_id)
+                courrier = await db.get(Courrier, courrier_id)
+                tenant = await db.get(Tenant, tenant_id)
+                if not (cible and courrier and tenant):
+                    return
+
+                corps = TEMPLATE_ALERTE_RETARD.render(
+                    prenom=cible.prenom,
+                    palier=palier,
+                    numero=courrier.numero_enregistrement,
+                    objet=courrier.objet,
+                    date_limite=courrier.date_limite,
+                    courrier_id=courrier_id,
+                    url_gedca=tenant.smtp_from or "http://localhost:5173",
+                )
+                sujet_label = (
+                    "AUJOURD'HUI"
+                    if palier == 0
+                    else f"J-{palier}"
+                )
+                sujet = (
+                    f"[Soft GEDCAP] Alerte échéance ({sujet_label}) — "
+                    f"{courrier.numero_enregistrement}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Préparation alerte retard: %s", exc)
+                return
+
+        await _envoyer_email_simple(
+            tenant_id=tenant_id,
+            destinataire_agent_id=agent_id,
+            sujet=sujet,
+            corps=corps,
+            courrier_id=courrier_id,
+            action_audit=f"courrier.alerte_retard_j{palier}",
         )
 
     asyncio.create_task(_envoyer())
