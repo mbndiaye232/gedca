@@ -133,10 +133,22 @@ async def _charger_courrier(
 async def _agent_voit_courrier(
     db: AsyncSession, courrier: Courrier, agent_id: int
 ) -> bool:
-    """Détermine si un agent voit un courrier (propriétaire OU en copie OU créateur)."""
+    """Détermine si un agent voit un courrier.
+
+    Sources de visibilité :
+    - propriétaire actuel
+    - créateur historique
+    - en copie (table `copies_courriers`)
+    - PRD-06B : agent valideur désigné — sinon il ne pourrait pas ouvrir
+      le courrier qui s'affiche dans sa corbeille « À valider ». On le
+      garde même après validation pour qu'il puisse consulter
+      l'historique du courrier qu'il a validé.
+    """
     if courrier.agent_proprietaire_id == agent_id:
         return True
     if courrier.created_by == agent_id:
+        return True
+    if courrier.agent_valideur_id == agent_id:
         return True
     nb = await db.scalar(
         select(func.count(CopieCourrier.agent_id)).where(
