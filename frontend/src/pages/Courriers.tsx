@@ -4,14 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  BadgeCheck,
   CheckCircle2,
   Clock,
   Copy,
+  Hourglass,
   Inbox,
   Mail,
   Plus,
   RefreshCw,
-  Lock,
+  ShieldCheck,
+  Stamp,
   type LucideIcon,
 } from 'lucide-react';
 import { compteursCorbeilles, listerCourriers } from '@/api/courriers';
@@ -30,10 +33,11 @@ const ICONES_CORBEILLE: Record<CorbeilleCode, LucideIcon> = {
   traite: CheckCircle2,
   en_copie: Copy,
   en_retard: Clock,
-  a_valider: CheckCircle2,
-  valides: CheckCircle2,
-  a_faire_valider: CheckCircle2,
-  en_validation: CheckCircle2,
+  // PRD-06B — icônes distinctes pour le workflow de validation
+  a_valider: ShieldCheck,        // côté valideur : "à valider par moi"
+  valides: BadgeCheck,            // côté demandeur : "validés, prêts à envoyer"
+  a_faire_valider: Stamp,         // côté demandeur : "je dois faire valider"
+  en_validation: Hourglass,       // côté demandeur : "en attente du valideur"
 };
 
 const TONS_CORBEILLE: Record<CorbeilleCode, string> = {
@@ -41,10 +45,14 @@ const TONS_CORBEILLE: Record<CorbeilleCode, string> = {
   traite: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   en_copie: 'bg-sky-50 text-sky-700 ring-sky-200',
   en_retard: 'bg-red-50 text-red-700 ring-red-200',
-  a_valider: 'bg-amber-50 text-amber-700 ring-amber-200',
-  valides: 'bg-amber-50 text-amber-700 ring-amber-200',
-  a_faire_valider: 'bg-amber-50 text-amber-700 ring-amber-200',
-  en_validation: 'bg-amber-50 text-amber-700 ring-amber-200',
+  // PRD-06B — tons distincts pour les 4 corbeilles validation, dans la
+  // famille violet/indigo pour signaler qu'on est dans un workflow
+  // d'autorisation hiérarchique (différent des urgences en rouge ou des
+  // courriers ordinaires en brand).
+  a_valider: 'bg-violet-50 text-violet-700 ring-violet-200',
+  valides: 'bg-teal-50 text-teal-700 ring-teal-200',
+  a_faire_valider: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200',
+  en_validation: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
 };
 
 const ICONES_SENS: Record<SensCourrier, LucideIcon> = {
@@ -96,21 +104,19 @@ export default function Courriers() {
         {compteurs?.corbeilles.map((c) => {
           const Icone = ICONES_CORBEILLE[c.code];
           const actif = corbeille === c.code;
-          const cliquable = c.actif_en_06a;
           return (
             <button
               key={c.code}
               type="button"
-              onClick={() => cliquable && setCorbeille(c.code)}
-              disabled={!cliquable}
+              onClick={() => setCorbeille(c.code)}
               className={cn(
                 'relative text-left rounded-2xl border bg-white p-4 transition-all',
+                // PRD-06B : toutes les corbeilles sont cliquables (les 4
+                // corbeilles validation sont désormais alimentées). Plus
+                // de `cliquable`/`opacity-60` hérité de l'ère 06A.
                 actif
                   ? 'border-courriers-300 shadow-card-hover ring-2 ring-courriers-100'
-                  : 'border-slate-200/70 shadow-card hover:shadow-card-hover',
-                cliquable
-                  ? 'hover:shadow-card-hover hover:border-slate-300 cursor-pointer'
-                  : 'opacity-60 cursor-not-allowed',
+                  : 'border-slate-200/70 shadow-card hover:shadow-card-hover hover:border-slate-300 cursor-pointer',
               )}
             >
               <div className="flex items-center justify-between mb-3">
@@ -122,11 +128,6 @@ export default function Courriers() {
                 >
                   <Icone className="h-4 w-4" />
                 </div>
-                {!cliquable && (
-                  <Badge variante="neutre">
-                    <Lock className="h-2.5 w-2.5 mr-1" /> PRD-06B
-                  </Badge>
-                )}
               </div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 {c.libelle}
@@ -270,9 +271,7 @@ function LigneCourrier({
         )}
       </td>
       <td className="px-5 py-3.5">
-        <Badge variante="info" pastille>
-          {courrier.statut.libelle}
-        </Badge>
+        <StatutBadge code={courrier.statut.code} libelle={courrier.statut.libelle} />
       </td>
       <td className="px-5 py-3.5 text-right">
         <Button taille="sm" onClick={onTraiter}>
@@ -280,6 +279,27 @@ function LigneCourrier({
         </Button>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Badge de statut courrier — palette dédiée pour chaque code (alignée
+ * avec les tons des corbeilles : amber pour les états « en transit »
+ * du workflow validation, vert pour les terminés, brand pour
+ * « à traiter ».
+ */
+function StatutBadge({ code, libelle }: { code: string; libelle: string }) {
+  const tons: Record<string, 'info' | 'succes' | 'attention' | 'violet' | 'neutre'> = {
+    a_traiter: 'info',
+    traite: 'succes',
+    a_faire_valider: 'attention',
+    en_validation: 'violet',
+    valide: 'succes',
+  };
+  return (
+    <Badge variante={tons[code] ?? 'neutre'} pastille>
+      {libelle}
+    </Badge>
   );
 }
 

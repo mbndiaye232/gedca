@@ -26,9 +26,9 @@ export async function listerAgents(): Promise<Agent[]> {
  * Annuaire des agents actifs accessible à tout agent connecté.
  *
  * À utiliser dans les sélecteurs (imputation, mise en copie, choix d'un
- * destinataire de courrier). Le `listerAgents` ci-dessus reste réservé à
- * la page d'administration RH (superviseur uniquement) et renvoie 403 aux
- * autres rôles.
+ * destinataire de courrier, choix d'un valideur PRD-06B). Le `listerAgents`
+ * ci-dessus reste réservé à la page d'administration RH (superviseur
+ * uniquement) et renvoie 403 aux autres rôles.
  */
 export async function listerAgentsDestinataires(): Promise<AgentDestinataire[]> {
   const { data } = await api.get<AgentDestinataire[]>('/agents/destinataires');

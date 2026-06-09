@@ -57,6 +57,11 @@ export default function CourrierNouveau() {
   const [documentTitre, setDocumentTitre] = useState('');
   const [documentCategorieId, setDocumentCategorieId] = useState<string>('');
 
+  // PRD-06B : si coché, le courrier arrive en statut a_faire_valider
+  // chez son destinataire (au lieu de a_traiter). Le destinataire devra
+  // demander la validation à un agent avant de pouvoir envoyer.
+  const [aFaireValider, setAFaireValider] = useState(false);
+
   const [progression, setProgression] = useState(0);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -105,6 +110,7 @@ export default function CourrierNouveau() {
         agent_destinataire_id: Number(agentDestinataireId),
         document_titre: documentTitre,
         document_categorie_id: Number(documentCategorieId),
+        a_faire_valider: aFaireValider,
       };
       return creerCourrier(fichier, body, (p) => setProgression(p));
     },
@@ -389,6 +395,30 @@ export default function CourrierNouveau() {
                 </p>
               </div>
             )}
+          </CardBody>
+        </Card>
+
+        {/* PRD-06B : workflow validation optionnel */}
+        <Card>
+          <CardBody className="p-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aFaireValider}
+                onChange={(e) => setAFaireValider(e.target.checked)}
+                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 mt-0.5"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-900">
+                  À faire valider avant l'envoi
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Le destinataire devra demander la validation à un agent
+                  avant de pouvoir envoyer. Utile pour les courriers
+                  sortants qui nécessitent un visa hiérarchique.
+                </p>
+              </div>
+            </label>
           </CardBody>
         </Card>
 

@@ -55,6 +55,11 @@ class CourrierCreation(BaseModel):
     document_titre: str = Field(..., min_length=1, max_length=512)
     document_categorie_id: int
 
+    # PRD-06B : si True, le courrier arrive en statut `a_faire_valider` au
+    # lieu de `a_traiter`. Le propriétaire devra ensuite cliquer
+    # "Demander une validation" pour choisir le valideur.
+    a_faire_valider: bool = False
+
 
 class CourrierMiseAJour(BaseModel):
     """PUT /api/courriers/{id} — modifications limitées en 06A."""
@@ -103,6 +108,18 @@ class RepondreBody(BaseModel):
     departement_destinataire_id: int | None = None
     document_titre: str = Field(..., min_length=1, max_length=512)
     document_categorie_id: int
+
+    # PRD-06B : si True, la réponse créée arrive en statut `a_faire_valider`.
+    # Le destinataire (l'agent qui m'a imputé en général) devra ensuite
+    # demander la validation à quelqu'un avant de pouvoir l'envoyer.
+    a_faire_valider: bool = False
+
+
+class DemanderValidationBody(BaseModel):
+    """Body de POST /api/courriers/{id}/demander-validation."""
+
+    agent_valideur_id: int
+    instruction: str | None = Field(None, max_length=1000)
 
 
 class NoteCreation(BaseModel):
@@ -174,6 +191,8 @@ class CourrierLecture(BaseModel):
     document_principal_id: int
     statut: StatutCourrierLecture
     courrier_origine_id: int | None
+    # PRD-06B : agent désigné pour valider (NULL si pas dans le workflow)
+    agent_valideur_id: int | None = None
     created_at: datetime
     created_by: int | None
     updated_at: datetime
