@@ -54,3 +54,19 @@ export async function desactiverAgent(id: number): Promise<Agent> {
   const { data } = await api.post<Agent>(`/agents/${id}/desactiver`);
   return data;
 }
+
+/**
+ * Initie la réinitialisation de mot de passe d'un agent (superviseur).
+ *
+ * Le backend génère un token aléatoire de 24h, l'envoie par email à
+ * l'agent qui suivra le lien `/reset-mdp?token=...` pour saisir son
+ * nouveau mot de passe.
+ */
+export async function initierResetMdpAgent(id: number): Promise<{
+  email_envoye: boolean;
+  destinataire_email: string | null;
+  duree_validite_heures: number;
+}> {
+  const { data } = await api.post(`/agents/${id}/reset-mdp/initier`);
+  return data;
+}

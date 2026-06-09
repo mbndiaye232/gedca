@@ -29,6 +29,7 @@ from app.models.courrier import (
 from app.models.document import Document, DocumentVersion
 from app.models.redirection import AlerteRetardEnvoyee, Redirection
 from app.models.referentiel import Categorie, Thematique, TypeDocument
+from app.models.reset_mdp import TokenResetMdp
 from app.models.tenant import Tenant
 
 __all__ = [
@@ -59,6 +60,7 @@ __all__ = [
     "StatutCourrier",
     "Tenant",
     "Thematique",
+    "TokenResetMdp",
     "TypeCorrespondant",
     "TypeDocument",
 ]

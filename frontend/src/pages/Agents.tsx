@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Pencil, Plus, Users } from 'lucide-react';
+import { Ban, KeyRound, Pencil, Plus, Users } from 'lucide-react';
 import {
   creerAgent,
   desactiverAgent,
+  initierResetMdpAgent,
   listerAgents,
   majAgent,
 } from '@/api/agents';
@@ -37,6 +38,24 @@ export default function Agents() {
   const desactivation = useMutation({
     mutationFn: desactiverAgent,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
+  });
+
+  const resetMdp = useMutation({
+    mutationFn: initierResetMdpAgent,
+    onSuccess: (data) => {
+      if (data.email_envoye) {
+        alert(
+          `Lien de réinitialisation envoyé à ${data.destinataire_email}.\n\n` +
+            `Le lien est valable ${data.duree_validite_heures} heures et ne peut servir qu'une fois.`,
+        );
+      } else {
+        alert(
+          "Le token a été généré mais l'email n'a pas pu être envoyé. " +
+            'Vérifie la configuration SMTP du tenant.',
+        );
+      }
+    },
+    onError: (err) => alert(extraireMessageErreur(err)),
   });
 
   function ouvrirCreation() {
@@ -143,6 +162,31 @@ export default function Agents() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {a.actif && (
+                            <Button
+                              variante="fantome"
+                              taille="sm"
+                              disabled={!a.email || resetMdp.isPending}
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Envoyer un lien de réinitialisation de mot de passe à ${a.prenom} ${a.nom} ?\n\n` +
+                                      `Email destinataire : ${a.email}\n` +
+                                      `Le lien sera valable 24 heures.`,
+                                  )
+                                ) {
+                                  resetMdp.mutate(a.id);
+                                }
+                              }}
+                              title={
+                                a.email
+                                  ? 'Réinitialiser le mot de passe'
+                                  : "Cet agent n'a pas d'email — renseigne-le d'abord"
+                              }
+                            >
+                              <KeyRound className="h-4 w-4 text-amber-600" />
+                            </Button>
+                          )}
                           {a.actif && (
                             <Button
                               variante="fantome"
