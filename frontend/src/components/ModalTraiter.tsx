@@ -263,8 +263,13 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
             icone={History}
           >
             <ul className="space-y-2">
-              {courrier.historique.map((h) => (
-                <LigneHistorique key={h.id} entree={h} />
+              {courrier.historique.map((h, i, arr) => (
+                <LigneHistorique
+                  key={h.id}
+                  entree={h}
+                  premier={i === arr.length - 1}
+                  dernier={i === arr.length - 1}
+                />
               ))}
             </ul>
           </CollapsibleSection>
@@ -526,14 +531,114 @@ function CollapsibleSection({
   );
 }
 
-function LigneHistorique({ entree }: { entree: HistoriqueCourrier }) {
+/**
+ * Construit le libellé enrichi d'une entrée d'historique à partir de son
+ * payload — pour donner un sens métier aux actions « Imputation à
+ * Khadidja FOFANA » plutôt que juste « Imputation ».
+ *
+ * Le payload est tel qu'écrit côté backend (cf. _ajouter_historique dans
+ * courriers.py). Les ids agents ne sont pas résolus ici — pour rester
+ * simple, on affiche les noms dans le payload quand ils y sont, et on
+ * tombe sur un libellé sobre sinon.
+ */
+function detailAction(entree: HistoriqueCourrier): string | null {
+  const p = entree.payload || {};
+  switch (entree.action.code) {
+    case 'creation': {
+      const sens = p.sens as string | undefined;
+      return sens ? `Sens : ${sens}` : null;
+    }
+    case 'copie': {
+      const agents = p.agents as number[] | undefined;
+      return agents?.length ? `${agents.length} agent(s) mis en copie` : null;
+    }
+    case 'imputation': {
+      const ancien = p.ancien_proprietaire_id as number | undefined;
+      return ancien ? `Propriétaire précédent : agent #${ancien}` : null;
+    }
+    case 'reponse': {
+      const numero = p.numero as string | undefined;
+      return numero ? `Réponse n° ${numero}` : null;
+    }
+    case 'note': {
+      const court = p.contenu_court as string | undefined;
+      return court ? `« ${court}${court.length >= 80 ? '…' : ''} »` : null;
+    }
+    case 'demande_validation': {
+      const valideur = p.agent_valideur_id as number | undefined;
+      const inst = p.instruction as string | null | undefined;
+      const parts: string[] = [];
+      if (valideur) parts.push(`Valideur : agent #${valideur}`);
+      if (inst) parts.push(`« ${inst} »`);
+      return parts.length ? parts.join(' · ') : null;
+    }
+    case 'validation': {
+      return 'Validation accordée';
+    }
+    case 'redirection': {
+      const orig = p.destinataire_original_id as number | undefined;
+      const sub = p.agent_substitut_id as number | undefined;
+      const ctx = p.contexte as string | undefined;
+      const parts: string[] = [];
+      if (orig && sub) parts.push(`Redirigé de l'agent #${orig} vers l'agent #${sub}`);
+      if (ctx) parts.push(`(contexte ${ctx})`);
+      return parts.length ? parts.join(' ') : null;
+    }
+    case 'envoi':
+      return 'Courrier clôturé';
+    case 'ajout_document':
+      return 'Pièce additionnelle ajoutée';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Une ligne de timeline historique. Présentation premium :
+ * - Marqueur circulaire bleu à gauche
+ * - Trait vertical reliant les lignes (sauf la dernière)
+ * - Nom complet de l'agent acteur
+ * - Libellé d'action en gras + détail contextuel sous-ligne
+ * - Date et heure formatées
+ */
+function LigneHistorique({
+  entree,
+  dernier = false,
+}: {
+  entree: HistoriqueCourrier;
+  premier?: boolean;
+  dernier?: boolean;
+}) {
+  const agentLabel = entree.agent
+    ? `${entree.agent.prenom} ${entree.agent.nom}`
+    : entree.agent_id
+      ? `Agent #${entree.agent_id}`
+      : 'Système';
+  const detail = detailAction(entree);
   return (
-    <li className="flex items-start gap-2 text-xs">
-      <div className="h-1.5 w-1.5 rounded-full bg-brand-600 mt-1.5 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-slate-900 font-medium">{entree.action.libelle}</p>
-        <p className="text-slate-500">
-          {entree.agent_id ? `Agent #${entree.agent_id} · ` : ''}
+    <li className="relative pl-7">
+      {/* Trait vertical (sauf sur la dernière entrée) */}
+      {!dernier && (
+        <span
+          aria-hidden
+          className="absolute left-[10px] top-4 bottom-[-12px] w-px bg-slate-200"
+        />
+      )}
+      {/* Marqueur circulaire */}
+      <span
+        aria-hidden
+        className="absolute left-1.5 top-1.5 h-3 w-3 rounded-full bg-brand-600 ring-2 ring-white shadow-card"
+      />
+      <div className="pb-3">
+        <p className="text-sm">
+          <span className="font-semibold text-slate-900">{agentLabel}</span>
+          <span className="text-slate-500"> — </span>
+          <span className="text-slate-700">{entree.action.libelle}</span>
+        </p>
+        {detail && (
+          <p className="text-xs text-slate-500 mt-0.5">{detail}</p>
+        )}
+        <p className="text-[11px] text-slate-400 font-mono mt-1">
           {formatDateTime(entree.ts)}
         </p>
       </div>

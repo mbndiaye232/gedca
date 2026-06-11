@@ -14,6 +14,7 @@ from app.api.v1 import (
     parametres_smtp,
     redirections,
     referentiels,
+    statistiques,
     structure,
 )
 
@@ -30,3 +31,4 @@ api_router.include_router(correspondants.router)
 api_router.include_router(courriers.router)
 api_router.include_router(redirections.router)
 api_router.include_router(parametres_smtp.router)
+api_router.include_router(statistiques.router)

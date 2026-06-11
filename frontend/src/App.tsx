@@ -18,6 +18,7 @@ import CourrierNouveau from './pages/CourrierNouveau';
 import Redirection from './pages/Redirection';
 import ResetMdp from './pages/ResetMdp';
 import ParametresMail from './pages/ParametresMail';
+import Statistiques from './pages/Statistiques';
 
 export default function App() {
   return (
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/referentiels" element={<Referentiels />} />
           <Route path="/structure" element={<Structure />} />
           <Route path="/parametres-mail" element={<ParametresMail />} />
+          <Route path="/statistiques" element={<Statistiques />} />
           <Route path="/audit-log" element={<AuditLog />} />
         </Route>
       </Route>

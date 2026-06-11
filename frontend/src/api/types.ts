@@ -400,6 +400,12 @@ export interface NoteCourrier {
 export interface HistoriqueCourrier {
   id: number;
   agent_id: number | null;
+  /**
+   * Mini-profil de l'agent qui a réalisé l'action — pour afficher
+   * « Khadidja FOFANA » au lieu de « Agent #5 ». Peut être null si
+   * l'agent a été supprimé ou si l'action est système.
+   */
+  agent: AgentResume | null;
   action: ActionCourrierLecture;
   payload: Record<string, unknown>;
   ts: string;
