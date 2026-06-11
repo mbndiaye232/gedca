@@ -210,6 +210,9 @@ class HistoriqueLecture(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     agent_id: int | None
+    # Mini-profil de l'agent pour affichage direct (prénom, nom). NULL
+    # si l'agent a été supprimé ou que l'action est système.
+    agent: AgentResume | None = None
     action: ActionCourrierLecture
     payload: dict[str, Any]
     ts: datetime

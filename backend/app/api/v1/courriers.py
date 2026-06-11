@@ -439,13 +439,28 @@ async def lire(
     )
     notes = [NoteLecture.model_validate(n) for n in res_notes.scalars()]
 
-    # Historique
+    # Historique — ordre chronologique ascendant (du plus ancien au plus
+    # récent) pour une lecture naturelle "comme une timeline".
     res_histo = await db.execute(
         select(HistoriqueCourrier)
         .where(HistoriqueCourrier.courrier_id == courrier.id)
-        .order_by(HistoriqueCourrier.ts.desc())
+        .order_by(HistoriqueCourrier.ts.asc())
     )
-    historique = [HistoriqueLecture.model_validate(h) for h in res_histo.scalars()]
+    # Mini-cache des agents pour ne pas faire un SELECT par ligne
+    rows = list(res_histo.scalars())
+    agent_ids = {r.agent_id for r in rows if r.agent_id is not None}
+    agents_map: dict[int, Agent] = {}
+    if agent_ids:
+        res_agents = await db.execute(
+            select(Agent).where(Agent.id.in_(agent_ids))
+        )
+        agents_map = {a.id: a for a in res_agents.scalars()}
+    historique = []
+    for h in rows:
+        item = HistoriqueLecture.model_validate(h)
+        if h.agent_id and h.agent_id in agents_map:
+            item.agent = AgentResume.model_validate(agents_map[h.agent_id])
+        historique.append(item)
 
     # Pièces additionnelles
     res_pieces = await db.execute(
