@@ -1,47 +1,23 @@
 # =============================================================================
 # Blueprint Render — Soft GEDCAP (SaaS cloud)
-# API FastAPI + worker Celery + beat + Redis.
 #
-# La base PostgreSQL existe déjà (créée manuellement dans le dashboard) :
-# elle n'est PAS gérée par ce blueprint. Coller son « Internal Database URL »
-# dans la variable DATABASE_URL (le schéma postgres:// est auto-corrigé en
-# postgresql+asyncpg:// par l'application).
+# Démarrage économique : **API seule + Redis (gratuit)**.
+# Le worker Celery et le beat (OCR, indexation full-text, alertes de retard
+# programmées, relève IMAP) sont commentés en bas de fichier — décommentez-les
+# quand vous voulez activer ces fonctions (ils ajoutent 2 services payants).
 #
-# Les variables `sync: false` sont à renseigner dans le dashboard Render
-# (onglet Environment) — jamais committées.
+# Toutes les variables sont posées directement sur le service `gedcap-api`,
+# donc demandées dès la création du blueprint (pas de groupe à remplir après).
+#
+# La base PostgreSQL existe déjà : coller son « Internal Database URL » dans
+# DATABASE_URL (le schéma postgres:// est auto-corrigé en postgresql+asyncpg://).
 # =============================================================================
-
-envVarGroups:
-  - name: gedcap-partage
-    envVars:
-      - key: DEPLOYMENT_MODE
-        value: saas
-      - key: DATABASE_URL
-        sync: false           # Internal Database URL de la base Render existante
-      - key: MASTER_KEY
-        sync: false           # clé AES-256 base64 (32 octets) — IDENTIQUE partout
-      - key: STORAGE_BACKEND
-        value: r2
-      - key: R2_ACCOUNT_ID
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET
-        sync: false
-      - key: AI_PROVIDER
-        value: anthropic       # 'ollama' indisponible sur Render (pas de GPU)
-      - key: ANTHROPIC_API_KEY
-        sync: false            # requis si AI_PROVIDER=anthropic (laisser vide sinon)
-      - key: VOYAGE_API_KEY
-        sync: false            # embeddings full-text (laisser vide sinon)
-      - key: LOG_LEVEL
-        value: INFO
 
 services:
   # ---------------------------------------------------------------------------
-  # Redis — broker Celery (+ résultats). Connexions internes uniquement.
+  # Redis — broker Celery (gratuit). Gardé même sans worker : l'API y dépose
+  # les tâches d'ingestion sans erreur ; elles seront traitées dès qu'un worker
+  # sera activé.
   # ---------------------------------------------------------------------------
   - type: redis
     name: gedcap-redis
@@ -61,49 +37,92 @@ services:
     healthCheckPath: /api/health
     dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
     envVars:
-      - fromGroup: gedcap-partage
+      - key: DEPLOYMENT_MODE
+        value: saas
+      - key: DATABASE_URL
+        sync: false           # Internal Database URL de la base Render existante
+      - key: MASTER_KEY
+        sync: false           # clé AES-256 base64 (32 octets)
       - key: JWT_SECRET
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false           # domaine Cloudflare Pages EN PREMIER (sert d'URL des liens email)
+      - key: STORAGE_BACKEND
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: AI_PROVIDER
+        value: anthropic       # 'ollama' indisponible sur Render (pas de GPU)
+      - key: ANTHROPIC_API_KEY
+        sync: false            # laisser vide si non utilisé
+      - key: VOYAGE_API_KEY
+        sync: false            # embeddings full-text — laisser vide si non utilisé
+      - key: LOG_LEVEL
+        value: INFO
       - key: REDIS_URL
         fromService:
           type: redis
           name: gedcap-redis
           property: connectionString
 
-  # ---------------------------------------------------------------------------
-  # Worker Celery — OCR, extraction, indexation full-text, relève IMAP.
-  # ---------------------------------------------------------------------------
-  - type: worker
-    name: gedcap-worker
-    runtime: docker
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
-    plan: starter
-    dockerCommand: celery -A app.worker worker --loglevel=info --concurrency=2
-    envVars:
-      - fromGroup: gedcap-partage
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: gedcap-redis
-          property: connectionString
-
-  # ---------------------------------------------------------------------------
-  # Beat — planificateur des tâches périodiques (alertes de retard, purge IMAP).
-  # ---------------------------------------------------------------------------
-  - type: worker
-    name: gedcap-beat
-    runtime: docker
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
-    plan: starter
-    dockerCommand: celery -A app.worker beat --loglevel=info
-    envVars:
-      - fromGroup: gedcap-partage
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: gedcap-redis
-          property: connectionString
+# =============================================================================
+# Worker Celery + Beat — À ACTIVER PLUS TARD (OCR, indexation, alertes, IMAP).
+# Décommentez les deux blocs ci-dessous ; ils réutilisent les mêmes variables
+# que gedcap-api (DATABASE_URL, MASTER_KEY, R2_*, AI_PROVIDER, ANTHROPIC/VOYAGE,
+# REDIS_URL). Chaque bloc = 1 service Starter supplémentaire.
+# =============================================================================
+#  - type: worker
+#    name: gedcap-worker
+#    runtime: docker
+#    rootDir: backend
+#    dockerfilePath: ./Dockerfile
+#    plan: starter
+#    dockerCommand: celery -A app.worker worker --loglevel=info --concurrency=2
+#    envVars:
+#      - key: DATABASE_URL
+#        sync: false
+#      - key: MASTER_KEY
+#        sync: false
+#      - key: STORAGE_BACKEND
+#        value: r2
+#      - key: R2_ACCOUNT_ID
+#        sync: false
+#      - key: R2_ACCESS_KEY_ID
+#        sync: false
+#      - key: R2_SECRET_ACCESS_KEY
+#        sync: false
+#      - key: R2_BUCKET
+#        sync: false
+#      - key: AI_PROVIDER
+#        value: anthropic
+#      - key: ANTHROPIC_API_KEY
+#        sync: false
+#      - key: VOYAGE_API_KEY
+#        sync: false
+#      - key: REDIS_URL
+#        fromService:
+#          type: redis
+#          name: gedcap-redis
+#          property: connectionString
+#
+#  - type: worker
+#    name: gedcap-beat
+#    runtime: docker
+#    rootDir: backend
+#    dockerfilePath: ./Dockerfile
+#    plan: starter
+#    dockerCommand: celery -A app.worker beat --loglevel=info
+#    envVars:
+#      - key: DATABASE_URL
+#        sync: false
+#      - key: REDIS_URL
+#        fromService:
+#          type: redis
+#          name: gedcap-redis
+#          property: connectionString
