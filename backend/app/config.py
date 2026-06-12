@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,25 @@ class Settings(BaseSettings):
     # --- Base ---
     database_url: str
 
+    @field_validator("database_url")
+    @classmethod
+    def _normaliser_database_url(cls, v: str) -> str:
+        """Force le driver asyncpg.
+
+        Render (et la plupart des hébergeurs) exposent l'URL en
+        `postgres://` ou `postgresql://`. SQLAlchemy async + Alembic
+        exigent `postgresql+asyncpg://`. On réécrit le schéma pour que
+        l'URL fournie par le dashboard soit utilisable telle quelle.
+        """
+        for prefixe in ("postgresql+asyncpg://", "postgresql+psycopg://"):
+            if v.startswith(prefixe):
+                return v
+        if v.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + v[len("postgresql://") :]
+        if v.startswith("postgres://"):
+            return "postgresql+asyncpg://" + v[len("postgres://") :]
+        return v
+
     # --- Redis / Celery ---
     redis_url: str = "redis://redis:6379/0"
     celery_worker_concurrency: int = 2
@@ -38,10 +57,22 @@ class Settings(BaseSettings):
     master_key: str = Field(..., description="Clé maître AES-256 en base64 (32 octets)")
 
     # --- Stockage ---
+    # 'local' : disque (dev / on-prem). 'r2' : Cloudflare R2 (SaaS cloud) —
+    # indispensable sur Render dont le disque est éphémère.
+    storage_backend: Literal["local", "r2"] = "local"
     storage_root: str = "/app/storage"
     quarantine_path: str = "/app/storage/quarantaine"
     worker_temp_dir: str = "/app/storage/tmp"
     max_upload_size_mb: int = 100
+
+    # --- Cloudflare R2 (requis si storage_backend = 'r2') ---
+    # R2 est compatible S3 ; on s'y connecte via boto3. L'endpoint peut être
+    # fourni directement, sinon il est dérivé de l'Account ID.
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str | None = None
+    r2_endpoint: str | None = None
 
     # --- Watcher ---
     watcher_root: str = "/app/storage/inbox"
@@ -62,6 +93,15 @@ class Settings(BaseSettings):
     def allowed_origins_list(self) -> list[str]:
         """Origines CORS sous forme de liste exploitable par FastAPI."""
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def r2_endpoint_url(self) -> str | None:
+        """URL de l'endpoint R2 — fournie explicitement ou dérivée de l'Account ID."""
+        if self.r2_endpoint:
+            return self.r2_endpoint
+        if self.r2_account_id:
+            return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
+        return None
 
 
 @lru_cache
