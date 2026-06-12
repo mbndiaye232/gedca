@@ -192,6 +192,15 @@ export function ModalTraiter({ ouvert, courrierId, onFermer }: Props) {
             <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('note')}>
               <StickyNote className="h-4 w-4" /> Ajouter une note
             </Button>
+            {/* Ajouter un document — ouvert à tous ceux qui voient le
+                courrier (destinataire, imputé, en copie) tant qu'il n'est
+                pas clôturé. Même action que le bouton « Ajouter » de la
+                section Pièces, repris ici pour la découvrabilité. */}
+            {peutTraiter && (
+              <Button variante="secondaire" taille="sm" onClick={() => setActionEnCours('document')}>
+                <Paperclip className="h-4 w-4" /> Ajouter un document
+              </Button>
+            )}
             {/* PRD-06B — workflow validation */}
             {peutTraiter && enFaireValider && (
               <Button

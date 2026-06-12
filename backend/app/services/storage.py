@@ -16,9 +16,11 @@ ajoute l'orchestration disque + métadonnées.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import aiofiles
@@ -103,6 +105,71 @@ def _chemin_relatif(tenant_id: int, checksum: str) -> str:
     return f"{tenant_id}/{checksum}.enc"
 
 
+# ---------------------------------------------------------------------------
+# Backend Cloudflare R2 (compatible S3 via boto3)
+# ---------------------------------------------------------------------------
+# R2 est sélectionné par STORAGE_BACKEND=r2. Le chemin relatif stocké en base
+# (`{tenant_id}/{checksum}.enc`) sert directement de clé d'objet R2 : le code
+# appelant (documents.py, courriers.py, worker) reste identique, seul le lieu
+# de stockage du blob chiffré change.
+
+
+@lru_cache(maxsize=1)
+def _r2_client():
+    """Client boto3 configuré pour Cloudflare R2. Mémoïsé.
+
+    Import paresseux de boto3 pour que les déploiements en stockage local
+    n'aient pas à le charger.
+    """
+    import boto3
+    from botocore.config import Config
+
+    s = get_settings()
+    endpoint = s.r2_endpoint_url
+    if not (endpoint and s.r2_access_key_id and s.r2_secret_access_key and s.r2_bucket):
+        raise StorageError(
+            "STORAGE_BACKEND=r2 mais configuration R2 incomplète "
+            "(R2_ACCOUNT_ID ou R2_ENDPOINT, R2_ACCESS_KEY_ID, "
+            "R2_SECRET_ACCESS_KEY, R2_BUCKET)."
+        )
+    return boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=s.r2_access_key_id,
+        aws_secret_access_key=s.r2_secret_access_key,
+        region_name="auto",
+        config=Config(signature_version="s3v4"),
+    )
+
+
+def _r2_put(key: str, payload: bytes) -> None:
+    _r2_client().put_object(Bucket=get_settings().r2_bucket, Key=key, Body=payload)
+
+
+def _r2_get(key: str) -> bytes:
+    from botocore.exceptions import ClientError
+
+    try:
+        reponse = _r2_client().get_object(Bucket=get_settings().r2_bucket, Key=key)
+    except ClientError as exc:
+        raise StorageError(f"Objet R2 introuvable : {key}") from exc
+    return reponse["Body"].read()
+
+
+def _r2_existe(key: str) -> bool:
+    from botocore.exceptions import ClientError
+
+    try:
+        _r2_client().head_object(Bucket=get_settings().r2_bucket, Key=key)
+        return True
+    except ClientError:
+        return False
+
+
+def _r2_supprimer(key: str) -> None:
+    _r2_client().delete_object(Bucket=get_settings().r2_bucket, Key=key)
+
+
 async def stocker(plaintext: bytes, tenant_id: int) -> FichierStocke:
     """Chiffre et écrit un buffer sur disque. Idempotent par checksum.
 
@@ -121,19 +188,24 @@ async def stocker(plaintext: bytes, tenant_id: int) -> FichierStocke:
     payload = chiffrer(plaintext, tenant_id=tenant_id, usage="documents")
     nonce = payload[:NONCE_TAILLE]
 
-    # 3. Écriture disque (idempotente : si le fichier existe déjà avec ce
-    #    checksum, on ne ré-écrit pas — il a déjà été uploadé.)
-    chemin = _chemin_chiffre(tenant_id, digest)
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    if not chemin.exists():
-        async with aiofiles.open(chemin, "wb") as fout:
-            await fout.write(payload)
+    # 3. Écriture (idempotente : si le blob existe déjà avec ce checksum,
+    #    on ne ré-écrit pas — il a déjà été uploadé).
+    key = _chemin_relatif(tenant_id, digest)
+    if get_settings().storage_backend == "r2":
+        if not await asyncio.to_thread(_r2_existe, key):
+            await asyncio.to_thread(_r2_put, key, payload)
+    else:
+        chemin = _chemin_chiffre(tenant_id, digest)
+        chemin.parent.mkdir(parents=True, exist_ok=True)
+        if not chemin.exists():
+            async with aiofiles.open(chemin, "wb") as fout:
+                await fout.write(payload)
 
     return FichierStocke(
         checksum_sha256=digest,
         taille_octets=len(plaintext),
         mime=mime,
-        chemin_relatif=_chemin_relatif(tenant_id, digest),
+        chemin_relatif=key,
         nonce=nonce,
     )
 
@@ -143,11 +215,14 @@ async def lire_dechiffre(chemin_relatif: str, tenant_id: int) -> bytes:
 
     Pour de gros fichiers, préférer `stream_dechiffre` qui yield par chunks.
     """
-    chemin = Path(get_settings().storage_root) / chemin_relatif
-    if not chemin.exists():
-        raise StorageError(f"Fichier introuvable : {chemin_relatif}")
-    async with aiofiles.open(chemin, "rb") as fin:
-        payload = await fin.read()
+    if get_settings().storage_backend == "r2":
+        payload = await asyncio.to_thread(_r2_get, chemin_relatif)
+    else:
+        chemin = Path(get_settings().storage_root) / chemin_relatif
+        if not chemin.exists():
+            raise StorageError(f"Fichier introuvable : {chemin_relatif}")
+        async with aiofiles.open(chemin, "rb") as fin:
+            payload = await fin.read()
     return dechiffrer(payload, tenant_id=tenant_id, usage="documents")
 
 
@@ -167,7 +242,10 @@ async def stream_dechiffre(
 
 
 def supprimer_fichier(chemin_relatif: str) -> None:
-    """Supprime un fichier chiffré du disque (silencieux si absent)."""
+    """Supprime un fichier chiffré du stockage (silencieux si absent)."""
+    if get_settings().storage_backend == "r2":
+        _r2_supprimer(chemin_relatif)
+        return
     chemin = Path(get_settings().storage_root) / chemin_relatif
     if chemin.exists():
         chemin.unlink()

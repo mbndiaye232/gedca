@@ -27,6 +27,7 @@ dependencies = [
   "aiofiles>=24.1",
   "python-multipart>=0.0.12",  # parsing multipart/form-data pour UploadFile
   "python-magic>=0.4.27",  # détection MIME par contenu (sur Linux/Docker)
+  "boto3>=1.35",  # client S3 pour Cloudflare R2 (stockage SaaS)
   # Ingestion / extraction de texte
   "watchdog>=6.0",
   "ocrmypdf>=16.6",

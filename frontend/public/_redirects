@@ -1,0 +1,4 @@
+# Cloudflare Pages — routage SPA (React Router).
+# Toute URL non-fichier est servie par index.html, qui charge l'app et
+# laisse React Router résoudre la route (/courriers, /reset-mdp, ...).
+/*    /index.html   200

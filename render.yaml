@@ -1,0 +1,109 @@
+# =============================================================================
+# Blueprint Render — Soft GEDCAP (SaaS cloud)
+# API FastAPI + worker Celery + beat + Redis.
+#
+# La base PostgreSQL existe déjà (créée manuellement dans le dashboard) :
+# elle n'est PAS gérée par ce blueprint. Coller son « Internal Database URL »
+# dans la variable DATABASE_URL (le schéma postgres:// est auto-corrigé en
+# postgresql+asyncpg:// par l'application).
+#
+# Les variables `sync: false` sont à renseigner dans le dashboard Render
+# (onglet Environment) — jamais committées.
+# =============================================================================
+
+envVarGroups:
+  - name: gedcap-partage
+    envVars:
+      - key: DEPLOYMENT_MODE
+        value: saas
+      - key: DATABASE_URL
+        sync: false           # Internal Database URL de la base Render existante
+      - key: MASTER_KEY
+        sync: false           # clé AES-256 base64 (32 octets) — IDENTIQUE partout
+      - key: STORAGE_BACKEND
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: AI_PROVIDER
+        value: anthropic       # 'ollama' indisponible sur Render (pas de GPU)
+      - key: ANTHROPIC_API_KEY
+        sync: false            # requis si AI_PROVIDER=anthropic (laisser vide sinon)
+      - key: VOYAGE_API_KEY
+        sync: false            # embeddings full-text (laisser vide sinon)
+      - key: LOG_LEVEL
+        value: INFO
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis — broker Celery (+ résultats). Connexions internes uniquement.
+  # ---------------------------------------------------------------------------
+  - type: redis
+    name: gedcap-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+  # ---------------------------------------------------------------------------
+  # API FastAPI (web) — migre la base puis démarre uvicorn.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: gedcap-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    envVars:
+      - fromGroup: gedcap-partage
+      - key: JWT_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false           # domaine Cloudflare Pages EN PREMIER (sert d'URL des liens email)
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gedcap-redis
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Worker Celery — OCR, extraction, indexation full-text, relève IMAP.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: gedcap-worker
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    dockerCommand: celery -A app.worker worker --loglevel=info --concurrency=2
+    envVars:
+      - fromGroup: gedcap-partage
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gedcap-redis
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Beat — planificateur des tâches périodiques (alertes de retard, purge IMAP).
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: gedcap-beat
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    dockerCommand: celery -A app.worker beat --loglevel=info
+    envVars:
+      - fromGroup: gedcap-partage
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gedcap-redis
+          property: connectionString
