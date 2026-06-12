@@ -35,7 +35,7 @@ services:
     dockerfilePath: ./Dockerfile
     plan: starter
     healthCheckPath: /api/health
-    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    dockerCommand: sh start.sh
     envVars:
       - key: DEPLOYMENT_MODE
         value: saas
