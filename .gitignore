@@ -65,3 +65,9 @@ docs/guide.txt
 # --- OS ---
 Thumbs.db
 desktop.ini
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
